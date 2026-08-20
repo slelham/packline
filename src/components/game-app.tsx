@@ -166,241 +166,247 @@ export function GameApp() {
   );
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-bg text-fg">
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 z-0 h-full w-full touch-none"
-        aria-label="Packline endless runner"
-      />
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-bg text-fg">
+      <div className="relative min-h-0 flex-1 px-3 pt-[max(0.65rem,env(safe-area-inset-top))] pb-2">
+        <div className="relative h-full overflow-hidden rounded-lg">
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 z-0 h-full w-full touch-none"
+            aria-label="Packline endless runner"
+          />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 px-3 pt-[max(0.55rem,env(safe-area-inset-top))] [text-shadow:0_1px_10px_rgba(20,28,16,0.7)]">
-        <div className="flex flex-col gap-0.5">
-          <p className="font-display text-[10px] tracking-[0.28em] text-muted uppercase">Packline</p>
-          <p className="font-mono text-3xl leading-none font-semibold tabular-nums">
-            {formatScore(playing || overlay === "dying" || overlay === "gameover" ? hud.score : hud.highScore)}
-          </p>
-          <p className="text-xs text-muted">
-            {playing ? (
-              <>
-                {dog.name}
-                {hud.combo >= 2 ? <span className="ml-2 text-accent tabular-nums">x{hud.combo}</span> : null}
-                {hud.runTreats > 0 ? <span className="ml-2 tabular-nums">{hud.runTreats} treats</span> : null}
-              </>
-            ) : (
-              <>Best · {hud.treats} treats</>
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 px-3 pt-3 [text-shadow:0_1px_10px_rgba(20,28,16,0.7)]">
+            <div className="flex flex-col gap-0.5">
+              <p className="font-display text-[10px] tracking-[0.28em] text-muted uppercase">Packline</p>
+              <p className="font-mono text-3xl leading-none font-semibold tabular-nums">
+                {formatScore(playing || overlay === "dying" || overlay === "gameover" ? hud.score : hud.highScore)}
+              </p>
+              <p className="text-xs text-muted">
+                {playing ? (
+                  <>
+                    {dog.name}
+                    {hud.combo >= 2 ? <span className="ml-2 text-accent tabular-nums">x{hud.combo}</span> : null}
+                    {hud.runTreats > 0 ? <span className="ml-2 tabular-nums">{hud.runTreats} treats</span> : null}
+                  </>
+                ) : (
+                  <>Best · {hud.treats} treats</>
+                )}
+              </p>
+            </div>
+            <div className="pointer-events-auto flex items-center gap-2">
+              {menu ? <AuthChip /> : null}
+              <Button
+                type="button"
+                data-ui
+                variant="secondary"
+                size="icon"
+                className="size-11 bg-surface/90 backdrop-blur-sm"
+                aria-label={hud.muted ? "Unmute" : "Mute"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  gameRef.current?.toggleMute();
+                }}
+              >
+                {hud.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {playing ? (
+            <div className="pointer-events-none absolute top-16 right-3 z-20 flex flex-col items-end gap-1">
+              {hud.shield > 0 ? (
+                <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-accent uppercase">
+                  Shield {Math.ceil(hud.shield)}
+                </span>
+              ) : null}
+              {hud.magnet > 0 ? (
+                <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-accent uppercase">
+                  Magnet {Math.ceil(hud.magnet)}
+                </span>
+              ) : null}
+              {hud.frenzy > 0 ? (
+                <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-danger uppercase">
+                  Frenzy {Math.ceil(hud.frenzy)}
+                </span>
+              ) : null}
+              <span className="rounded-full bg-surface/70 px-2 py-0.5 text-[10px] tracking-wide text-muted uppercase">
+                {hud.biome}
+              </span>
+            </div>
+          ) : null}
+
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-x-0 top-0 z-10 h-1 origin-left bg-accent",
+              playing ? "opacity-80" : "opacity-0",
             )}
-          </p>
-        </div>
-        <div className="pointer-events-auto flex items-center gap-2">
-          {menu ? <AuthChip /> : null}
-          <Button
-            type="button"
-            data-ui
-            variant="secondary"
-            size="icon"
-            className="size-11 bg-surface/90 backdrop-blur-sm"
-            aria-label={hud.muted ? "Unmute" : "Mute"}
-            onClick={(e) => {
-              e.stopPropagation();
-              gameRef.current?.toggleMute();
-            }}
-          >
-            {hud.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-          </Button>
+            style={{ transform: `scaleX(${Math.min(1, hud.distance / 2400)})` }}
+          />
+
+          {overlay === "title" || overlay === "boot" ? (
+            <div
+              data-ui
+              className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-4"
+            >
+              <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
+              <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
+              <p className="mt-1 text-center text-sm text-muted">Tap a dog. Chain hoops. Bank treats.</p>
+              {hud.missions.length > 0 ? (
+                <ul className="mx-auto mt-3 grid max-w-md grid-cols-3 gap-1.5">
+                  {hud.missions.map((m) => (
+                    <li
+                      key={m.id}
+                      className={cn(
+                        "rounded-md border px-2 py-1.5 text-xs",
+                        m.done ? "border-accent/50 bg-elevated text-accent" : "border-border bg-surface/80 text-muted",
+                      )}
+                    >
+                      <p className="truncate font-medium text-fg">{m.label}</p>
+                      <p className="tabular-nums">
+                        {m.progress}/{m.goal}
+                        {m.done ? " done" : ` · +${m.reward}`}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="mx-auto mt-3 grid max-w-md grid-cols-2 gap-2 sm:grid-cols-4">
+                {DOG_IDS.map((id) => {
+                  const d = DOGS[id];
+                  const selected = hud.character === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      data-ui
+                      onPointerDown={(e) => playDog(id, e)}
+                      onClick={(e) => playDog(id, e)}
+                      className={cn(
+                        "min-h-[5.5rem] rounded-lg border bg-bg/80 px-1 py-1.5 backdrop-blur-sm",
+                        selected ? "border-accent bg-elevated" : "border-border",
+                      )}
+                    >
+                      <img
+                        src={`/sprites/${id}/run-1.png?v=bandana`}
+                        alt=""
+                        draggable={false}
+                        className="pointer-events-none mx-auto h-11 w-11 object-contain"
+                      />
+                      <p className="mt-1 text-center text-sm font-medium">{d.name}</p>
+                      <p className="text-center text-[10px] text-accent">{d.blurb}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <Button
+                type="button"
+                data-ui
+                size="lg"
+                className="mx-auto mt-3 flex h-14 w-full max-w-md text-base"
+                onPointerDown={(e) => playDog(hud.character, e)}
+                onClick={(e) => playDog(hud.character, e)}
+              >
+                Run {dog.name}
+              </Button>
+              <p className="mt-2 text-center text-xs text-subtle">Jump · Slide · Shield · Magnet · Frenzy</p>
+            </div>
+          ) : null}
+
+          {overlay === "gameover" ? (
+            <div
+              data-ui
+              className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/96 to-transparent px-4 pt-16 pb-4"
+            >
+              <p className="text-[10px] tracking-[0.28em] text-muted uppercase">{dog.name} wiped out</p>
+              <p className="font-display mt-1 text-5xl leading-none font-extrabold tabular-nums">{formatScore(hud.score)}</p>
+              {hud.newBest ? <p className="mt-1 text-sm text-accent">New best</p> : null}
+              <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
+                <div className="rounded-md bg-elevated/90 px-2 py-2">
+                  <dt className="text-[10px] text-muted">Combo</dt>
+                  <dd className="font-mono tabular-nums">x{hud.lastRunCombo}</dd>
+                </div>
+                <div className="rounded-md bg-elevated/90 px-2 py-2">
+                  <dt className="text-[10px] text-muted">Treats</dt>
+                  <dd className="font-mono text-xs tabular-nums">+{hud.runTreats}</dd>
+                </div>
+                <div className="rounded-md bg-elevated/90 px-2 py-2">
+                  <dt className="text-[10px] text-muted">Hoops</dt>
+                  <dd className="font-mono tabular-nums">{hud.lastRunThreads}</dd>
+                </div>
+                <div className="rounded-md bg-elevated/90 px-2 py-2">
+                  <dt className="text-[10px] text-muted">Tunnels</dt>
+                  <dd className="font-mono tabular-nums">{hud.lastRunTunnels}</dd>
+                </div>
+              </dl>
+              {hud.canRevive ? (
+                <Button type="button" data-ui size="lg" className="mt-3 h-14 w-full text-base" onPointerDown={tryRevive} onClick={tryRevive}>
+                  <Heart className="size-4" />
+                  Continue · {hud.reviveCost} treats
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                data-ui
+                size="lg"
+                variant={hud.canRevive ? "secondary" : "primary"}
+                className="mt-2 h-14 w-full text-base"
+                onPointerDown={runAgain}
+                onClick={runAgain}
+              >
+                <RotateCcw className="size-4" />
+                Run again
+              </Button>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  data-ui
+                  variant="secondary"
+                  className="h-12"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    gameRef.current?.returnToTitle();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    gameRef.current?.returnToTitle();
+                  }}
+                >
+                  Switch dog
+                </Button>
+                <Button type="button" data-ui variant="secondary" className="h-12" onClick={shareRun}>
+                  <Share2 className="size-4" />
+                  Share
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {playing ? (
-        <div className="pointer-events-none absolute top-16 right-3 z-20 flex flex-col items-end gap-1">
-          {hud.shield > 0 ? (
-            <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-accent uppercase">
-              Shield {Math.ceil(hud.shield)}
-            </span>
-          ) : null}
-          {hud.magnet > 0 ? (
-            <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-accent uppercase">
-              Magnet {Math.ceil(hud.magnet)}
-            </span>
-          ) : null}
-          {hud.frenzy > 0 ? (
-            <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-danger uppercase">
-              Frenzy {Math.ceil(hud.frenzy)}
-            </span>
-          ) : null}
-          <span className="rounded-full bg-surface/70 px-2 py-0.5 text-[10px] tracking-wide text-muted uppercase">
-            {hud.biome}
-          </span>
-        </div>
-      ) : null}
-
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 z-10 h-1 origin-left bg-accent",
-          playing ? "opacity-80" : "opacity-0",
-        )}
-        style={{ transform: `scaleX(${Math.min(1, hud.distance / 2400)})` }}
-      />
-
-      {overlay === "title" || overlay === "boot" ? (
+      {playing || overlay === "dying" ? (
         <div
           data-ui
-          className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-[max(0.85rem,env(safe-area-inset-bottom))]"
-        >
-          <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
-          <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
-          <p className="mt-1 text-center text-sm text-muted">Tap a dog. Chain hoops. Bank treats.</p>
-          {hud.missions.length > 0 ? (
-            <ul className="mx-auto mt-3 grid max-w-md grid-cols-3 gap-1.5">
-              {hud.missions.map((m) => (
-                <li
-                  key={m.id}
-                  className={cn(
-                    "rounded-md border px-2 py-1.5 text-xs",
-                    m.done ? "border-accent/50 bg-elevated text-accent" : "border-border bg-surface/80 text-muted",
-                  )}
-                >
-                  <p className="truncate font-medium text-fg">{m.label}</p>
-                  <p className="tabular-nums">
-                    {m.progress}/{m.goal}
-                    {m.done ? " done" : ` · +${m.reward}`}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <div className="mx-auto mt-3 grid max-w-md grid-cols-2 gap-2 sm:grid-cols-4">
-            {DOG_IDS.map((id) => {
-              const d = DOGS[id];
-              const selected = hud.character === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  data-ui
-                  onPointerDown={(e) => playDog(id, e)}
-                  onClick={(e) => playDog(id, e)}
-                  className={cn(
-                    "min-h-[5.5rem] rounded-lg border bg-bg/80 px-1 py-1.5 backdrop-blur-sm",
-                    selected ? "border-accent bg-elevated" : "border-border",
-                  )}
-                >
-                  <img
-                    src={`/sprites/${id}/run-1.png?v=bandana`}
-                    alt=""
-                    draggable={false}
-                    className="pointer-events-none mx-auto h-11 w-11 object-contain"
-                  />
-                  <p className="mt-1 text-center text-sm font-medium">{d.name}</p>
-                  <p className="text-center text-[10px] text-accent">{d.blurb}</p>
-                </button>
-              );
-            })}
-          </div>
-          <Button
-            type="button"
-            data-ui
-            size="lg"
-            className="mx-auto mt-3 flex h-14 w-full max-w-md text-base"
-            onPointerDown={(e) => playDog(hud.character, e)}
-            onClick={(e) => playDog(hud.character, e)}
-          >
-            Run {dog.name}
-          </Button>
-          <p className="mt-2 text-center text-xs text-subtle">Jump · Slide · Shield · Magnet · Frenzy</p>
-        </div>
-      ) : null}
-
-      {overlay === "gameover" ? (
-        <div
-          data-ui
-          className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/96 to-transparent px-4 pt-16 pb-[max(1rem,env(safe-area-inset-bottom))]"
-        >
-          <p className="text-[10px] tracking-[0.28em] text-muted uppercase">{dog.name} wiped out</p>
-          <p className="font-display mt-1 text-5xl leading-none font-extrabold tabular-nums">{formatScore(hud.score)}</p>
-          {hud.newBest ? <p className="mt-1 text-sm text-accent">New best</p> : null}
-          <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
-            <div className="rounded-md bg-elevated/90 px-2 py-2">
-              <dt className="text-[10px] text-muted">Combo</dt>
-              <dd className="font-mono tabular-nums">x{hud.lastRunCombo}</dd>
-            </div>
-            <div className="rounded-md bg-elevated/90 px-2 py-2">
-              <dt className="text-[10px] text-muted">Treats</dt>
-              <dd className="font-mono text-xs tabular-nums">+{hud.runTreats}</dd>
-            </div>
-            <div className="rounded-md bg-elevated/90 px-2 py-2">
-              <dt className="text-[10px] text-muted">Hoops</dt>
-              <dd className="font-mono tabular-nums">{hud.lastRunThreads}</dd>
-            </div>
-            <div className="rounded-md bg-elevated/90 px-2 py-2">
-              <dt className="text-[10px] text-muted">Tunnels</dt>
-              <dd className="font-mono tabular-nums">{hud.lastRunTunnels}</dd>
-            </div>
-          </dl>
-          {hud.canRevive ? (
-            <Button type="button" data-ui size="lg" className="mt-3 h-14 w-full text-base" onPointerDown={tryRevive} onClick={tryRevive}>
-              <Heart className="size-4" />
-              Continue · {hud.reviveCost} treats
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            data-ui
-            size="lg"
-            variant={hud.canRevive ? "secondary" : "primary"}
-            className="mt-2 h-14 w-full text-base"
-            onPointerDown={runAgain}
-            onClick={runAgain}
-          >
-            <RotateCcw className="size-4" />
-            Run again
-          </Button>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              data-ui
-              variant="secondary"
-              className="h-12"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                gameRef.current?.returnToTitle();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                gameRef.current?.returnToTitle();
-              }}
-            >
-              Switch dog
-            </Button>
-            <Button type="button" data-ui variant="secondary" className="h-12" onClick={shareRun}>
-              <Share2 className="size-4" />
-              Share
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {playing ? (
-        <div
-          data-ui
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-end justify-between px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))]"
+          className="grid shrink-0 grid-cols-2 gap-3 px-3 pt-1 pb-[max(0.85rem,env(safe-area-inset-bottom))]"
         >
           <button
             type="button"
             data-ui
             aria-label="Jump"
-            className="pointer-events-auto flex size-12 items-center justify-center rounded-full border border-border bg-surface/55 text-fg backdrop-blur-sm"
+            className="flex h-16 items-center justify-center gap-2 rounded-lg border border-border bg-elevated text-base font-semibold"
             {...jumpHold}
           >
-            <ChevronsUp className="size-5" />
+            <ChevronsUp className="size-6" />
+            Jump
           </button>
           <button
             type="button"
             data-ui
             aria-label="Slide"
-            className="pointer-events-auto flex size-12 items-center justify-center rounded-full bg-accent/90 text-accent-fg"
+            className="flex h-16 items-center justify-center gap-2 rounded-lg bg-accent text-base font-semibold text-accent-fg"
             {...slideHold}
           >
-            <ChevronsDown className="size-5" />
+            <ChevronsDown className="size-6" />
+            Slide
           </button>
         </div>
       ) : null}
