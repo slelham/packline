@@ -2,9 +2,12 @@ import { loadSprites, type ActionSheets, type SpriteBank } from "./assets";
 import { GameAudio } from "./audio";
 import { DOGS, type DogId } from "./characters";
 import { Input } from "./input";
+import { ensureMissions, todayKey, toHud, type MissionHud } from "./missions";
 import { loadSave, writeSave, type SaveData } from "./save";
 
 export type Phase = "boot" | "title" | "playing" | "dying" | "gameover";
+export type Biome = "park" | "beach" | "show";
+export type PowerKind = "shield" | "magnet" | "frenzy";
 
 export type HudState = {
   phase: Phase;
@@ -23,6 +26,15 @@ export type HudState = {
   threads: number;
   tunnels: number;
   character: DogId;
+  treats: number;
+  runTreats: number;
+  shield: number;
+  magnet: number;
+  frenzy: number;
+  canRevive: boolean;
+  reviveCost: number;
+  biome: Biome;
+  missions: MissionHud[];
 };
 
 export type HudListener = (s: HudState) => void;
@@ -61,6 +73,7 @@ type Obstacle = {
 };
 
 type Coin = { active: boolean; x: number; y: number; r: number };
+type Pickup = { active: boolean; kind: PowerKind; x: number; y: number };
 type Particle = {
   active: boolean;
   x: number;
@@ -172,6 +185,17 @@ export class PacklineGame {
   private resizeObs: ResizeObserver | null = null;
   private startGrace = 0;
   private titleT = 0;
+  private runTreats = 0;
+  private shieldT = 0;
+  private magnetT = 0;
+  private frenzyT = 0;
+  private invulnT = 0;
+  private usedRevive = false;
+  private pickups: Pickup[] = [];
+  private spawnCount = 0;
+  private biome: Biome = "park";
+  private lastBiome: Biome = "park";
+  readonly reviveCost = 40;
 
   constructor(canvas: HTMLCanvasElement, onHud: HudListener) {
     this.canvas = canvas;
@@ -181,6 +205,8 @@ export class PacklineGame {
     this.parent = canvas.parentElement ?? canvas;
     this.onHud = onHud;
     this.save = loadSave();
+    this.save.missions = ensureMissions(this.save.day, this.save.missions);
+    this.save.day = todayKey();
     this.charId = this.save.character;
     this.audio.setMuted(this.save.muted);
     this.input = new Input(this.canvas);
@@ -274,6 +300,37 @@ export class PacklineGame {
     this.input.releaseJump();
   }
 
+  revive() {
+    if (this.phase !== "gameover" || this.usedRevive) return false;
+    if (this.save.treats < this.reviveCost) return false;
+    this.save.treats -= this.reviveCost;
+    this.usedRevive = true;
+    writeSave(this.save);
+    this.audio.unlock();
+    this.audio.revive();
+    this.phase = "playing";
+    this.player.y = this.ground;
+    this.player.vy = 0;
+    this.player.grounded = true;
+    this.player.sliding = false;
+    this.invulnT = 2.1;
+    this.shieldT = Math.max(this.shieldT, 2.1);
+    this.startGrace = 0.35;
+    this.flash = 0.28;
+    this.trauma = 0.2;
+    this.clearAhead();
+    this.hudKey = "";
+    this.emitHud();
+    return true;
+  }
+
+  private clearAhead() {
+    const cut = this.player.x + this.speed * 1.4;
+    for (const o of this.obstacles) {
+      if (o.active && o.x < cut) o.active = false;
+    }
+  }
+
   private dog() {
     return DOGS[this.charId];
   }
@@ -320,6 +377,7 @@ export class PacklineGame {
     }));
     this.bursts = Array.from({ length: 8 }, () => ({ active: false, x: 0, y: 0, t: 0, kind: "dust" }));
     this.floaters = Array.from({ length: 12 }, () => ({ active: false, x: 0, y: 0, text: "", t: 0 }));
+    this.pickups = Array.from({ length: 6 }, () => ({ active: false, kind: "shield", x: 0, y: 0 }));
   }
 
   private buildPark() {
@@ -386,6 +444,7 @@ export class PacklineGame {
       this.sitObstacle(o);
     }
     for (const c of this.coins) if (c.active) c.y += dy;
+    for (const u of this.pickups) if (u.active) u.y += dy;
     for (const n of this.particles) if (n.active) n.y += dy;
     for (const b of this.bursts) if (b.active) b.y += dy;
     for (const f of this.floaters) if (f.active) f.y += dy;
@@ -443,7 +502,6 @@ export class PacklineGame {
     }
 
     if (this.phase === "gameover") {
-      if (this.input.consumeJump() || this.input.consumeSlide()) this.restart();
       this.decayJuice(dt);
       this.emitHud();
       return;
@@ -515,6 +573,17 @@ export class PacklineGame {
     this.trauma = 0;
     this.flash = 0;
     this.dustTimer = 0;
+    this.runTreats = 0;
+    this.shieldT = 0;
+    this.magnetT = 0;
+    this.frenzyT = 0;
+    this.invulnT = 0;
+    this.usedRevive = false;
+    this.spawnCount = 0;
+    this.biome = "park";
+    this.lastBiome = "park";
+    this.skyGrad = null;
+    for (const u of this.pickups) u.active = false;
     this.hudDirty = true;
   }
 
@@ -525,16 +594,26 @@ export class PacklineGame {
   private stepPlay(dt: number) {
     const p = this.progress();
     this.speed = lerp(BASE_SPEED, MAX_SPEED, 1 - (1 - p) * (1 - p)) * this.dog().speed;
+    if (this.frenzyT > 0) this.speed *= 1.12;
     this.distance += this.speed * dt * 0.12;
-    this.score += this.speed * dt * 0.1 * (1 + this.combo * 0.06);
+    const mult = (1 + this.combo * 0.06) * (this.frenzyT > 0 ? 2.2 : 1);
+    this.score += this.speed * dt * 0.1 * mult;
+    this.shieldT = Math.max(0, this.shieldT - dt);
+    this.magnetT = Math.max(0, this.magnetT - dt);
+    this.frenzyT = Math.max(0, this.frenzyT - dt);
+    this.invulnT = Math.max(0, this.invulnT - dt);
+    this.audio.tick(dt, true);
+    this.updateBiome();
 
     this.scrollWorld(dt);
     this.spawnAhead();
     this.stepPlayer(dt);
     this.stepObstacles(dt);
     this.stepCoins();
+    this.stepPickups();
     this.stepFx(dt);
     this.decayJuice(dt);
+    this.bumpMissions();
 
     if (this.player.grounded && !this.player.sliding) {
       this.dustTimer -= dt;
@@ -545,6 +624,16 @@ export class PacklineGame {
     }
   }
 
+  private updateBiome() {
+    const p = this.progress();
+    const next: Biome = p < 0.34 ? "park" : p < 0.68 ? "beach" : "show";
+    if (next !== this.biome) {
+      this.biome = next;
+      this.skyGrad = null;
+      this.spawnFloater(this.player.x + 40, this.player.y - 90, next === "beach" ? "BEACH" : next === "show" ? "NIGHT SHOW" : "PARK");
+    }
+  }
+
   private scrollWorld(dt: number) {
     const dx = this.speed * dt;
     this.scroll += dx;
@@ -552,6 +641,7 @@ export class PacklineGame {
     this.midScroll += dx * 0.42;
     for (const o of this.obstacles) if (o.active) o.x -= dx;
     for (const c of this.coins) if (c.active) c.x -= dx;
+    for (const u of this.pickups) if (u.active) u.x -= dx;
     for (const b of this.bursts) if (b.active) b.x -= dx;
     this.nextSpawn -= dx;
   }
@@ -581,6 +671,8 @@ export class PacklineGame {
       this.lastKind = follow;
     }
     this.nextSpawn = spawnX + extra + Math.max(minGap, span + 40);
+    this.spawnCount += 1;
+    if (first && this.spawnCount % 7 === 0) this.placePickup(spawnX + extra + 90);
   }
 
   private pickKind(p: number): Kind {
@@ -676,6 +768,37 @@ export class PacklineGame {
     c.x = x;
     c.y = y;
     c.r = 15;
+  }
+
+  private placePickup(x: number) {
+    const u = this.pickups.find((n) => !n.active);
+    if (!u) return;
+    const r = Math.random();
+    u.active = true;
+    u.kind = r < 0.38 ? "shield" : r < 0.72 ? "magnet" : "frenzy";
+    u.x = x;
+    u.y = this.ground - 92;
+  }
+
+  private bumpMissions() {
+    const list = this.save.missions;
+    let dirty = false;
+    for (const m of list) {
+      const before = m.progress;
+      if (m.id === "hoops") m.progress = Math.max(m.progress, this.threads);
+      if (m.id === "tunnels") m.progress = Math.max(m.progress, this.tunnels);
+      if (m.id === "treats") m.progress = Math.max(m.progress, this.runTreats);
+      if (m.id === "combo") m.progress = Math.max(m.progress, this.maxCombo);
+      if (m.id === "distance") m.progress = Math.max(m.progress, Math.floor(this.distance));
+      if (before < m.goal && m.progress >= m.goal && !m.claimed) {
+        m.claimed = true;
+        this.save.treats += m.reward;
+        this.audio.mission();
+        this.spawnFloater(this.player.x, this.player.y - 110, `MISSION +${m.reward}`);
+        dirty = true;
+      }
+    }
+    if (dirty) writeSave(this.save);
   }
 
   private hitbox() {
@@ -787,6 +910,18 @@ export class PacklineGame {
       }
       this.sitObstacle(o);
       if (this.collides(box, o)) {
+        if (this.invulnT > 0) continue;
+        if (this.shieldT > 0) {
+          this.shieldT = 0;
+          this.invulnT = 0.7;
+          this.flash = 0.22;
+          this.trauma = 0.28;
+          this.audio.shield();
+          this.spawnBurst(this.player.x + 20, this.player.y - 40, "impact");
+          o.active = false;
+          this.spawnFloater(box.x, box.y - 20, "SHIELD");
+          continue;
+        }
         this.die(o);
         return;
       }
@@ -835,11 +970,22 @@ export class PacklineGame {
 
   private stepCoins() {
     const box = this.hitbox();
+    const px = box.x + box.w * 0.5;
+    const py = box.y + box.h * 0.4;
     for (const c of this.coins) {
       if (!c.active) continue;
       if (c.x + c.r < -40) {
         c.active = false;
         continue;
+      }
+      if (this.magnetT > 0) {
+        const mx = px - c.x;
+        const my = py - c.y;
+        const mag = Math.hypot(mx, my) || 1;
+        if (mag < 240) {
+          c.x += (mx / mag) * 420 * (1 / 60);
+          c.y += (my / mag) * 420 * (1 / 60);
+        }
       }
       const cx = clamp(c.x, box.x, box.x + box.w);
       const cy = clamp(c.y, box.y, box.y + box.h);
@@ -847,13 +993,44 @@ export class PacklineGame {
       const dy = c.y - cy;
       if (dx * dx + dy * dy < c.r * c.r) {
         c.active = false;
-        const gain = Math.round(40 * (1 + this.combo * 0.08));
+        this.runTreats += 1;
+        const gain = Math.round(40 * (1 + this.combo * 0.08) * (this.frenzyT > 0 ? 2 : 1));
         this.score += gain;
         this.audio.coin();
         this.spawnFloater(c.x, c.y, `+${gain}`);
         this.emitParticle(c.x, c.y, 0, -40, 0.4, 5, "#5ec8c4");
         this.hudDirty = true;
       }
+    }
+  }
+
+  private stepPickups() {
+    const box = this.hitbox();
+    for (const u of this.pickups) {
+      if (!u.active) continue;
+      if (u.x < -40) {
+        u.active = false;
+        continue;
+      }
+      if (aabb(box.x, box.y, box.w, box.h, u.x - 18, u.y - 18, 36, 36)) {
+        u.active = false;
+        this.grantPower(u.kind);
+      }
+    }
+  }
+
+  private grantPower(kind: PowerKind) {
+    this.audio.power();
+    this.flash = 0.16;
+    if (kind === "shield") {
+      this.shieldT = 8;
+      this.spawnFloater(this.player.x, this.player.y - 80, "SHIELD");
+    } else if (kind === "magnet") {
+      this.magnetT = 7;
+      this.spawnFloater(this.player.x, this.player.y - 80, "MAGNET");
+    } else {
+      this.frenzyT = 6;
+      this.spawnFloater(this.player.x, this.player.y - 80, "FRENZY");
     }
   }
 
@@ -888,12 +1065,15 @@ export class PacklineGame {
     this.lastRunThreads = this.threads;
     this.lastRunTunnels = this.tunnels;
     this.save.gamesPlayed += 1;
+    this.save.treats += this.runTreats;
     if (this.maxCombo > this.save.bestCombo) this.save.bestCombo = this.maxCombo;
+    if (this.distance > this.save.bestDistance) this.save.bestDistance = this.distance;
     const rounded = Math.floor(this.score);
     if (rounded > this.save.highScore) {
       this.save.highScore = rounded;
       this.newBest = true;
     }
+    this.bumpMissions();
     writeSave(this.save);
     this.hudDirty = true;
   }
@@ -960,7 +1140,7 @@ export class PacklineGame {
   }
 
   private emitHud() {
-    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}`;
+    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${this.biome}|${this.usedRevive}`;
     if (snap === this.hudKey) return;
     this.hudKey = snap;
     this.onHud({
@@ -980,6 +1160,15 @@ export class PacklineGame {
       threads: this.threads,
       tunnels: this.tunnels,
       character: this.charId,
+      treats: this.save.treats,
+      runTreats: this.runTreats,
+      shield: this.shieldT,
+      magnet: this.magnetT,
+      frenzy: this.frenzyT,
+      canRevive: this.phase === "gameover" && !this.usedRevive && this.save.treats >= this.reviveCost,
+      reviveCost: this.reviveCost,
+      biome: this.biome,
+      missions: toHud(this.save.missions),
     });
     this.hudDirty = false;
   }
@@ -1004,6 +1193,7 @@ export class PacklineGame {
     this.drawTrees();
     this.drawGround();
     this.drawCoins();
+    this.drawPickups();
     this.drawObstacles(false);
     this.drawTunnels(false);
     this.drawBursts();
@@ -1024,28 +1214,52 @@ export class PacklineGame {
 
   private drawSky() {
     const ctx = this.ctx;
-    if (!this.skyGrad || this.skyH !== this.viewH) {
+    if (!this.skyGrad || this.skyH !== this.viewH || this.lastBiome !== this.biome) {
       const g = ctx.createLinearGradient(0, 0, 0, this.viewH);
-      g.addColorStop(0, "#6ea0d4");
-      g.addColorStop(0.38, "#f2c27a");
-      g.addColorStop(0.68, "#f6d5a0");
-      g.addColorStop(0.86, "#b7d48a");
-      g.addColorStop(1, "#6fa35c");
+      if (this.biome === "beach") {
+        g.addColorStop(0, "#7ec4e8");
+        g.addColorStop(0.42, "#f7d7a4");
+        g.addColorStop(0.72, "#f3c98a");
+        g.addColorStop(1, "#e8c07a");
+      } else if (this.biome === "show") {
+        g.addColorStop(0, "#1b2740");
+        g.addColorStop(0.4, "#3a4a6a");
+        g.addColorStop(0.72, "#6b5a48");
+        g.addColorStop(1, "#2f4634");
+      } else {
+        g.addColorStop(0, "#6ea0d4");
+        g.addColorStop(0.38, "#f2c27a");
+        g.addColorStop(0.68, "#f6d5a0");
+        g.addColorStop(0.86, "#b7d48a");
+        g.addColorStop(1, "#6fa35c");
+      }
       this.skyGrad = g;
       this.skyH = this.viewH;
+      this.lastBiome = this.biome;
     }
     ctx.fillStyle = this.skyGrad;
     ctx.fillRect(0, 0, this.viewW, this.viewH);
     const sx = this.viewW * 0.8;
     const sy = this.viewH * 0.16;
-    ctx.fillStyle = "rgba(255, 210, 110, 0.28)";
-    ctx.beginPath();
-    ctx.arc(sx, sy, 78, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ffe08a";
-    ctx.beginPath();
-    ctx.arc(sx, sy, 28, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.biome === "show") {
+      ctx.fillStyle = "rgba(232, 236, 244, 0.85)";
+      ctx.beginPath();
+      ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(232, 236, 244, 0.16)";
+      ctx.beginPath();
+      ctx.arc(sx, sy, 48, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = "rgba(255, 210, 110, 0.28)";
+      ctx.beginPath();
+      ctx.arc(sx, sy, 78, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffe08a";
+      ctx.beginPath();
+      ctx.arc(sx, sy, 28, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   private drawClouds() {
@@ -1067,7 +1281,7 @@ export class PacklineGame {
     const ctx = this.ctx;
     const base = this.ground - 8;
     const off = this.farScroll % this.farW;
-    ctx.fillStyle = "#6b9a58";
+    ctx.fillStyle = this.biome === "beach" ? "#d2b47a" : this.biome === "show" ? "#35543a" : "#6b9a58";
     for (const pass of [0, 1]) {
       const shift = -off + pass * this.farW;
       for (const h of this.far) {
@@ -1078,7 +1292,7 @@ export class PacklineGame {
         ctx.fill();
       }
     }
-    ctx.fillStyle = "#5b8a4c";
+    ctx.fillStyle = this.biome === "beach" ? "#c4a066" : this.biome === "show" ? "#2a4530" : "#5b8a4c";
     ctx.fillRect(0, base - 12, this.viewW, 20);
   }
 
@@ -1122,7 +1336,7 @@ export class PacklineGame {
     ctx.fillRect(0, y, this.viewW, 38);
     ctx.fillStyle = "#b39158";
     ctx.fillRect(0, y, this.viewW, 5);
-    ctx.fillStyle = "#d8bc86";
+    ctx.fillStyle = this.biome === "beach" ? "#e6c98a" : this.biome === "show" ? "#8a7458" : "#d8bc86";
     ctx.fillRect(0, y + 5, this.viewW, 2);
     const tile = 86;
     const start = -((this.scroll) % tile);
@@ -1134,7 +1348,7 @@ export class PacklineGame {
       ctx.lineTo(x + 22, y + 36);
       ctx.stroke();
     }
-    ctx.fillStyle = "#4d8a4a";
+    ctx.fillStyle = this.biome === "beach" ? "#c9b06a" : this.biome === "show" ? "#3d6a42" : "#4d8a4a";
     const tuft = 28;
     const t0 = -((this.scroll * 0.7) % tuft);
     for (let x = t0; x < this.viewW + 20; x += tuft) {
@@ -1292,6 +1506,26 @@ export class PacklineGame {
     }
   }
 
+  private drawPickups() {
+    const ctx = this.ctx;
+    const t = this.player.anim;
+    for (const u of this.pickups) {
+      if (!u.active) continue;
+      if (u.x < -30 || u.x > this.viewW + 30) continue;
+      const bob = Math.sin(t * 5 + u.x * 0.03) * 6;
+      const color = u.kind === "shield" ? "#5ec8c4" : u.kind === "magnet" ? "#e8c07a" : "#d4654a";
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y + bob, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(236,232,220,0.85)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y + bob, 18, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   private drawPlayer() {
     const p = this.player;
     const sheets = this.sheets();
@@ -1355,6 +1589,13 @@ export class PacklineGame {
     } else {
       ctx.fillStyle = "#ece8dc";
       ctx.fillRect(p.x - w * 0.25, p.y - h, w * 0.5, h);
+    }
+    if (this.shieldT > 0 || this.invulnT > 0) {
+      ctx.strokeStyle = `rgba(94, 200, 196, ${0.45 + Math.sin(p.anim * 10) * 0.2})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - h * 0.45, w * 0.58, h * 0.58, 0, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.restore();
   }

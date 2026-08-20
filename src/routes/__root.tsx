@@ -14,7 +14,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0b1220" },
       {
         name: "description",
-        content: "Pick Remy, Teddy, or Osha and run the park. Jump the hoops, slide the tunnels, chain combos.",
+        content: "Pick Remy, Teddy, or Osha. Jump, slide, chain combos, grab treats, and run the park.",
       },
     ],
     links: [

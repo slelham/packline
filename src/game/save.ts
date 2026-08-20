@@ -1,7 +1,8 @@
 import { isDogId, type DogId } from "./characters";
+import { todayKey, type MissionProgress } from "./missions";
 
 const KEY = "packline-save";
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 export type SaveData = {
   version: number;
@@ -10,6 +11,10 @@ export type SaveData = {
   bestCombo: number;
   muted: boolean;
   character: DogId;
+  treats: number;
+  bestDistance: number;
+  day: string;
+  missions: MissionProgress[];
 };
 
 const defaults: SaveData = {
@@ -19,6 +24,10 @@ const defaults: SaveData = {
   bestCombo: 0,
   muted: false,
   character: "remy",
+  treats: 0,
+  bestDistance: 0,
+  day: "",
+  missions: [],
 };
 
 function migrate(raw: Partial<SaveData> & { version?: number }): SaveData {
@@ -26,8 +35,16 @@ function migrate(raw: Partial<SaveData> & { version?: number }): SaveData {
   merged.highScore = Math.max(0, Number(merged.highScore) || 0);
   merged.gamesPlayed = Math.max(0, Number(merged.gamesPlayed) || 0);
   merged.bestCombo = Math.max(0, Number(merged.bestCombo) || 0);
+  merged.treats = raw.treats == null ? 80 : Math.max(0, Number(raw.treats) || 0);
+  merged.bestDistance = Math.max(0, Number(merged.bestDistance) || 0);
   merged.muted = Boolean(merged.muted);
   merged.character = isDogId(merged.character) ? merged.character : "remy";
+  merged.day = typeof merged.day === "string" ? merged.day : "";
+  merged.missions = Array.isArray(merged.missions) ? merged.missions : [];
+  if (merged.day !== todayKey()) {
+    merged.day = todayKey();
+    merged.missions = [];
+  }
   return merged;
 }
 
