@@ -229,9 +229,6 @@ export function GameApp() {
                   Frenzy {Math.ceil(hud.frenzy)}
                 </span>
               ) : null}
-              <span className="rounded-full bg-surface/70 px-2 py-0.5 text-[10px] tracking-wide text-muted uppercase">
-                {hud.biome}
-              </span>
             </div>
           ) : null}
 

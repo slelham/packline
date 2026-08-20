@@ -19,11 +19,11 @@ export type MissionHud = {
 };
 
 const POOL: MissionDef[] = [
-  { id: "hoops", label: "Thread 8 hoops", goal: 8, reward: 40 },
-  { id: "tunnels", label: "Clear 4 tunnels", goal: 4, reward: 35 },
-  { id: "treats", label: "Grab 20 treats", goal: 20, reward: 30 },
-  { id: "combo", label: "Hit a 10x combo", goal: 10, reward: 45 },
-  { id: "distance", label: "Run 500 park meters", goal: 500, reward: 50 },
+  { id: "hoops", label: "8 hoops", goal: 8, reward: 40 },
+  { id: "tunnels", label: "4 tunnels", goal: 4, reward: 35 },
+  { id: "treats", label: "20 treats", goal: 20, reward: 30 },
+  { id: "combo", label: "10x combo", goal: 10, reward: 45 },
+  { id: "distance", label: "500 meters", goal: 500, reward: 50 },
 ];
 
 export function todayKey() {
