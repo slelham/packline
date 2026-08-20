@@ -572,7 +572,7 @@ export class PacklineGame {
     for (const p of this.particles) p.active = false;
     for (const b of this.bursts) b.active = false;
     for (const f of this.floaters) f.active = false;
-    this.nextSpawn = this.viewW + Math.max(140, this.speed * 0.85);
+    this.nextSpawn = this.viewW + Math.max(220, this.speed * 1.15);
     this.lastKind = null;
     this.hitstop = 0;
     this.startGrace = 0;
@@ -655,29 +655,29 @@ export class PacklineGame {
 
   private spawnAhead() {
     const p = this.progress();
-    const timeGap = lerp(1.32, 0.78, p);
+    const timeGap = lerp(1.62, 1.12, p);
     let right = -Infinity;
     for (const o of this.obstacles) if (o.active) right = Math.max(right, o.x + o.w);
-    const lead = this.speed * 2.15 + 120;
-    const minGap = this.speed * timeGap + lerp(90, 40, p);
+    const lead = this.speed * 2.35 + 140;
+    const minGap = this.speed * timeGap + lerp(150, 110, p);
     const spawnX = Number.isFinite(right)
       ? right + minGap
-      : Math.max(this.nextSpawn, this.viewW + 120);
+      : Math.max(this.nextSpawn, this.viewW + 160);
     if (spawnX > this.viewW + lead) return;
 
     const kind = this.pickKind(p);
-    const extra = kind === "tunnel" ? this.speed * 0.1 : 0;
+    const extra = kind === "tunnel" ? this.speed * 0.18 : 0;
     const first = this.placeObstacle(kind, spawnX + extra);
     this.lastKind = kind;
     let span = (first?.w ?? 80) + extra;
-    if (p > 0.48 && first && Math.random() < 0.34) {
+    if (p > 0.58 && first && Math.random() < 0.2) {
       const follow: Kind = p > 0.72 && kind === "hurdle" ? "hurdle" : p > 0.6 && kind === "crate" ? "hydrant" : kind === "hoop" ? "hurdle" : "hoop";
-      const gap = lerp(70, 48, p);
+      const gap = lerp(170, 130, p);
       const second = this.placeObstacle(follow, spawnX + extra + first.w + gap);
       if (second) span = second.x + second.w - spawnX;
       this.lastKind = follow;
     }
-    this.nextSpawn = spawnX + extra + Math.max(minGap, span + 40);
+    this.nextSpawn = spawnX + extra + Math.max(minGap, span + 90);
     this.spawnCount += 1;
     if (first && this.spawnCount % 7 === 0) this.placePickup(spawnX + extra + 90);
   }
@@ -1215,6 +1215,7 @@ export class PacklineGame {
     this.drawTunnels(false);
     this.drawBursts();
     this.drawPlayer();
+    this.drawCat();
     this.drawTunnels(true);
     this.drawObstacles(true);
     this.drawParticles();
@@ -1541,6 +1542,37 @@ export class PacklineGame {
       ctx.arc(u.x, u.y + bob, 18, 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+
+  private drawCat() {
+    if (this.charId !== "osha") return;
+    if (this.phase === "boot") return;
+    const spr = this.sprites;
+    const ctx = this.ctx;
+    const t = this.player.anim;
+    const lead = clamp(this.viewW * 0.36, 108, 188);
+    const x = this.player.x + lead + Math.sin(t * 8.2) * 8;
+    const lift = Math.max(0, this.ground - this.player.y);
+    const y = this.ground - lift * 0.88 - (this.player.sliding ? 4 : 0) + Math.sin(t * 14) * 1.5;
+    ctx.save();
+    ctx.fillStyle = "rgba(8,10,12,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(x, this.ground + 4, 14, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const airborne = lift > 10;
+    const frames = airborne ? spr?.catJump : spr?.catRun;
+    const frame = frames ? frames[Math.floor(t * (airborne ? 9 : 12)) % 4]! : null;
+    const h = 78;
+    const w = 84;
+    if (frame) {
+      ctx.drawImage(frame, x - w * 0.5, y - h + 6, w, h);
+    } else {
+      ctx.fillStyle = "#d9843a";
+      ctx.beginPath();
+      ctx.ellipse(x, y - 18, 16, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   private drawPlayer() {

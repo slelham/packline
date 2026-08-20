@@ -59,7 +59,7 @@ export const DOGS: Record<DogId, DogProfile> = {
     id: "osha",
     name: "Osha",
     breed: "Siberian Husky",
-    blurb: "Ice slide",
+    blurb: "Chases cats",
     scale: 1,
     jump: 1,
     slide: 1.38,
