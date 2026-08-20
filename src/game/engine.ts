@@ -161,6 +161,13 @@ export class PacklineGame {
     landKick: 0,
     jumpStretch: 0,
   };
+  private cat = {
+    y: 0,
+    vy: 0,
+    grounded: true,
+    sliding: false,
+    slideT: 0,
+  };
   private obstacles: Obstacle[] = [];
   private coins: Coin[] = [];
   private particles: Particle[] = [];
@@ -216,6 +223,7 @@ export class PacklineGame {
     this.buildPark();
     this.fit();
     this.player.y = this.ground;
+    this.cat.y = this.ground;
     this.resizeObs = new ResizeObserver(() => this.fit());
     this.resizeObs.observe(this.parent);
     window.addEventListener("resize", this.fit);
@@ -314,6 +322,10 @@ export class PacklineGame {
     this.player.vy = 0;
     this.player.grounded = true;
     this.player.sliding = false;
+    this.cat.y = this.ground;
+    this.cat.vy = 0;
+    this.cat.grounded = true;
+    this.cat.sliding = false;
     this.invulnT = 2.1;
     this.shieldT = Math.max(this.shieldT, 2.1);
     this.startGrace = 0.35;
@@ -440,6 +452,8 @@ export class PacklineGame {
     const dy = this.ground - prev;
     if (this.player.grounded && this.phase !== "dying") this.player.y = this.ground;
     else this.player.y += dy;
+    if (this.cat.grounded) this.cat.y = this.ground;
+    else this.cat.y += dy;
     if (Math.abs(dy) < 0.5) return;
     for (const o of this.obstacles) {
       if (!o.active) continue;
@@ -567,6 +581,11 @@ export class PacklineGame {
     this.player.anim = 0;
     this.player.landKick = 0;
     this.player.jumpStretch = 0;
+    this.cat.y = this.ground;
+    this.cat.vy = 0;
+    this.cat.grounded = true;
+    this.cat.sliding = false;
+    this.cat.slideT = 0;
     for (const o of this.obstacles) o.active = false;
     for (const c of this.coins) c.active = false;
     for (const p of this.particles) p.active = false;
@@ -615,6 +634,7 @@ export class PacklineGame {
     this.scrollWorld(dt);
     this.spawnAhead();
     this.stepPlayer(dt);
+    this.stepCat(dt);
     this.stepObstacles(dt);
     this.stepCoins();
     this.stepPickups();
@@ -890,6 +910,67 @@ export class PacklineGame {
     const k = 1 - Math.exp(-18 * dt);
     p.squash += (targetSquash - p.squash) * k;
     p.stretch += (targetStretch - p.stretch) * k;
+  }
+
+  private catLead() {
+    return clamp(this.viewW * 0.36, 108, 188);
+  }
+
+  private catX() {
+    return this.player.x + this.catLead() + Math.sin(this.player.anim * 8.2) * 8;
+  }
+
+  private stepCat(dt: number) {
+    if (this.charId !== "osha") return;
+    const g = this.ground;
+    const x = this.player.x + this.catLead();
+    let ahead: Obstacle | null = null;
+    let best = Infinity;
+    for (const o of this.obstacles) {
+      if (!o.active) continue;
+      const dist = o.x - x;
+      if (dist < -o.w) continue;
+      if (dist < best) {
+        best = dist;
+        ahead = o;
+      }
+    }
+
+    const jumpAt = this.speed * 0.26;
+    const slideAt = this.speed * 0.18;
+    if (ahead && this.cat.grounded && !this.cat.sliding) {
+      const dist = ahead.x - x;
+      if (ahead.kind === "tunnel" || ahead.kind === "pipe") {
+        if (dist < slideAt + 24) {
+          this.cat.sliding = true;
+          this.cat.slideT = Math.max(0.5, (ahead.w + 50) / Math.max(220, this.speed));
+        }
+      } else if (dist < jumpAt && dist > -12) {
+        this.cat.vy = JUMP_VEL * 0.98;
+        this.cat.grounded = false;
+      }
+    }
+
+    if (this.cat.sliding) {
+      this.cat.slideT -= dt;
+      if (ahead && (ahead.kind === "tunnel" || ahead.kind === "pipe") && x < ahead.x + ahead.w + 16) {
+        this.cat.sliding = true;
+        this.cat.slideT = Math.max(this.cat.slideT, 0.06);
+      } else if (this.cat.slideT <= 0) {
+        this.cat.sliding = false;
+      }
+    }
+
+    this.cat.vy = Math.min(MAX_FALL, this.cat.vy + GRAVITY * dt);
+    this.cat.y += this.cat.vy * dt;
+    if (this.cat.y >= g) {
+      this.cat.y = g;
+      this.cat.vy = 0;
+      this.cat.grounded = true;
+    } else {
+      this.cat.grounded = false;
+      this.cat.sliding = false;
+    }
   }
 
   private land() {
@@ -1550,26 +1631,27 @@ export class PacklineGame {
     const spr = this.sprites;
     const ctx = this.ctx;
     const t = this.player.anim;
-    const lead = clamp(this.viewW * 0.36, 108, 188);
-    const x = this.player.x + lead + Math.sin(t * 8.2) * 8;
-    const lift = Math.max(0, this.ground - this.player.y);
-    const y = this.ground - lift * 0.88 - (this.player.sliding ? 4 : 0) + Math.sin(t * 14) * 1.5;
+    const x = this.catX();
+    const y = this.cat.y + Math.sin(t * 14) * (this.cat.grounded && !this.cat.sliding ? 1.4 : 0);
     ctx.save();
     ctx.fillStyle = "rgba(8,10,12,0.28)";
     ctx.beginPath();
-    ctx.ellipse(x, this.ground + 4, 14, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, this.ground + 4, this.cat.sliding ? 18 : 14, 4, 0, 0, Math.PI * 2);
     ctx.fill();
-    const airborne = lift > 10;
-    const frames = airborne ? spr?.catJump : spr?.catRun;
-    const frame = frames ? frames[Math.floor(t * (airborne ? 9 : 12)) % 4]! : null;
-    const h = 78;
-    const w = 84;
+    const airborne = !this.cat.grounded;
+    const frames = airborne || this.cat.sliding ? spr?.catJump : spr?.catRun;
+    let idx = Math.floor(t * (airborne ? 9 : 12)) % 4;
+    if (this.cat.sliding) idx = 0;
+    else if (airborne) idx = this.cat.vy < -200 ? 1 : Math.abs(this.cat.vy) < 140 ? 2 : 3;
+    const frame = frames ? frames[idx]! : null;
+    const h = (this.cat.sliding ? 42 : 78) * (airborne ? 1.06 : 1);
+    const w = this.cat.sliding ? 92 : 84;
     if (frame) {
       ctx.drawImage(frame, x - w * 0.5, y - h + 6, w, h);
     } else {
       ctx.fillStyle = "#d9843a";
       ctx.beginPath();
-      ctx.ellipse(x, y - 18, 16, 12, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y - (this.cat.sliding ? 12 : 18), 16, this.cat.sliding ? 8 : 12, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
