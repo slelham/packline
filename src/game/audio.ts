@@ -104,6 +104,12 @@ export class GameAudio {
     this.tone(180, 0.12, "sawtooth", 0.03, 90);
   }
 
+  boost() {
+    this.tone(220, 0.1, "sawtooth", 0.07, 520);
+    this.tone(440, 0.18, "square", 0.05, 880);
+    this.noise(0.14, 0.07, 700);
+  }
+
   coin() {
     this.tone(880, 0.08, "sine", 0.08, 1320);
     this.tone(1320, 0.1, "triangle", 0.05, 1760);

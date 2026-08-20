@@ -201,6 +201,7 @@ export class PacklineGame {
   private magnetT = 0;
   private frenzyT = 0;
   private invulnT = 0;
+  private boostT = 0;
   private usedRevive = false;
   private pickups: Pickup[] = [];
   private spawnCount = 0;
@@ -606,6 +607,7 @@ export class PacklineGame {
     this.magnetT = 0;
     this.frenzyT = 0;
     this.invulnT = 0;
+    this.boostT = 0;
     this.usedRevive = false;
     this.spawnCount = 0;
     this.biome = "park";
@@ -623,13 +625,15 @@ export class PacklineGame {
     const p = this.progress();
     this.speed = lerp(BASE_SPEED, MAX_SPEED, 1 - (1 - p) * (1 - p)) * this.dog().speed;
     if (this.frenzyT > 0) this.speed *= 1.12;
+    if (this.boostT > 0) this.speed *= 1.48;
     this.distance += this.speed * dt * 0.12;
-    const mult = (1 + this.combo * 0.06) * (this.frenzyT > 0 ? 2.2 : 1);
+    const mult = (1 + this.combo * 0.06) * (this.frenzyT > 0 ? 2.2 : 1) * (this.boostT > 0 ? 1.25 : 1);
     this.score += this.speed * dt * 0.1 * mult;
     this.shieldT = Math.max(0, this.shieldT - dt);
     this.magnetT = Math.max(0, this.magnetT - dt);
     this.frenzyT = Math.max(0, this.frenzyT - dt);
     this.invulnT = Math.max(0, this.invulnT - dt);
+    this.boostT = Math.max(0, this.boostT - dt);
     this.audio.tick(dt, true);
     this.updateBiome();
 
@@ -756,7 +760,7 @@ export class PacklineGame {
       h = HOOP_H;
       gap = HOOP_HOLE_TOP;
     } else if (kind === "tunnel") {
-      w = clamp(this.viewW * lerp(0.36, 0.58, p), 140, 280);
+      w = clamp(this.viewW * lerp(0.22, 0.34, p), 96, 150);
       h = 28;
       gap = TUNNEL_GAP;
     } else if (kind === "weave") {
@@ -788,7 +792,11 @@ export class PacklineGame {
 
     if (kind === "hoop") {
       this.placeCoin(x + w * 0.5, o.holeY + o.holeH * 0.5);
-    } else if (kind !== "tunnel" && kind !== "pipe" && Math.random() < 0.55) {
+    } else if (kind === "tunnel") {
+      this.placeCoin(x + w * 0.5, g - o.gap - 36);
+      this.placeCoin(x + w * 0.32, g - 26);
+      this.placeCoin(x + w * 0.68, g - 26);
+    } else if (kind !== "pipe" && Math.random() < 0.55) {
       const n = 2 + Math.floor(Math.random() * 2);
       const lift = clamp(stand * 0.55 + peak * 0.18, 48, 92);
       for (let i = 0; i < n; i++) {
@@ -984,7 +992,11 @@ export class PacklineGame {
       return hitTop || hitBot;
     }
     if (o.kind === "tunnel" || o.kind === "pipe") {
-      return aabb(box.x, box.y, box.w, box.h, x, o.y + 10, w, Math.max(8, o.h - 12));
+      if (this.player.sliding) return false;
+      const roof = this.ground - o.gap - 18;
+      if (box.y + box.h < roof + 12) return false;
+      const padX = 8;
+      return aabb(box.x, box.y, box.w, box.h, o.x + padX, roof, Math.max(20, o.w - padX * 2), this.ground - roof - 4);
     }
     const top = o.kind === "hurdle" || o.kind === "crate" || o.kind === "hydrant" ? 10 : 6;
     return aabb(box.x, box.y, box.w, box.h, x, o.y + top, w, Math.max(12, o.h - top - 4));
@@ -1019,10 +1031,21 @@ export class PacklineGame {
 
       const overlapX = box.x < o.x + o.w && box.x + box.w > o.x;
       if (overlapX) {
-        if (o.kind === "tunnel") {
-          this.inTunnel = true;
-          const gap = o.y - (box.y + box.h);
-          o.near = Math.min(o.near, Math.abs(gap));
+        if (o.kind === "tunnel" || o.kind === "pipe") {
+          if (this.player.sliding) {
+            this.inTunnel = true;
+            if (!o.special) {
+              o.special = true;
+              this.boostT = Math.max(this.boostT, 0.95);
+              this.combo += 1;
+              this.score += 90;
+              this.flash = Math.max(this.flash, 0.16);
+              this.audio.boost();
+              this.spawnFloater(box.x + 16, box.y - 18, `BOOST x${this.combo}`);
+              this.hudDirty = true;
+            }
+          }
+          o.near = Math.min(o.near, this.player.sliding ? 0 : Math.abs(box.y + box.h - (this.ground - o.gap)));
         } else if (o.kind === "hoop") {
           const inHole = box.y >= o.holeY - 8 && box.y + box.h <= o.holeY + o.holeH + 8;
           if (inHole) o.special = true;
@@ -1034,6 +1057,11 @@ export class PacklineGame {
 
       if (!o.scored && o.x + o.w < box.x) {
         o.scored = true;
+        if (o.kind === "tunnel" && o.special) {
+          this.tunnels += 1;
+          this.hudDirty = true;
+          continue;
+        }
         this.combo += 1;
         if (o.near < 20) this.combo += 1;
         let label = o.near < 20 ? `CLOSE x${this.combo}` : `x${this.combo}`;
@@ -1047,7 +1075,7 @@ export class PacklineGame {
           this.tunnels += 1;
           this.combo += 1;
           this.score += 70;
-          label = `TUNNEL x${this.combo}`;
+          label = `VAULT x${this.combo}`;
         }
         this.maxCombo = Math.max(this.maxCombo, this.combo);
         const gain = Math.round(28 * this.combo * (o.near < 20 ? 1.4 : 1));
@@ -1295,7 +1323,7 @@ export class PacklineGame {
     this.drawObstacles(true);
     this.drawParticles();
     this.drawFloaters();
-    if (this.speed > 520 && !this.reduced) this.drawSpeedLines();
+    if ((this.speed > 520 || this.boostT > 0) && !this.reduced) this.drawSpeedLines();
     this.drawVignette();
 
     ctx.restore();
