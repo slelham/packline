@@ -163,10 +163,9 @@ export class PacklineGame {
   };
   private cat = {
     y: 0,
-    vy: 0,
-    grounded: true,
-    sliding: false,
-    slideT: 0,
+    sway: 0,
+    side: 1,
+    marked: -1,
   };
   private obstacles: Obstacle[] = [];
   private coins: Coin[] = [];
@@ -323,9 +322,9 @@ export class PacklineGame {
     this.player.grounded = true;
     this.player.sliding = false;
     this.cat.y = this.ground;
-    this.cat.vy = 0;
-    this.cat.grounded = true;
-    this.cat.sliding = false;
+    this.cat.sway = 0;
+    this.cat.side = 1;
+    this.cat.marked = -1;
     this.invulnT = 2.1;
     this.shieldT = Math.max(this.shieldT, 2.1);
     this.startGrace = 0.35;
@@ -452,8 +451,7 @@ export class PacklineGame {
     const dy = this.ground - prev;
     if (this.player.grounded && this.phase !== "dying") this.player.y = this.ground;
     else this.player.y += dy;
-    if (this.cat.grounded) this.cat.y = this.ground;
-    else this.cat.y += dy;
+    this.cat.y = this.ground;
     if (Math.abs(dy) < 0.5) return;
     for (const o of this.obstacles) {
       if (!o.active) continue;
@@ -582,10 +580,9 @@ export class PacklineGame {
     this.player.landKick = 0;
     this.player.jumpStretch = 0;
     this.cat.y = this.ground;
-    this.cat.vy = 0;
-    this.cat.grounded = true;
-    this.cat.sliding = false;
-    this.cat.slideT = 0;
+    this.cat.sway = 0;
+    this.cat.side = 1;
+    this.cat.marked = -1;
     for (const o of this.obstacles) o.active = false;
     for (const c of this.coins) c.active = false;
     for (const p of this.particles) p.active = false;
@@ -917,60 +914,41 @@ export class PacklineGame {
   }
 
   private catX() {
-    return this.player.x + this.catLead() + Math.sin(this.player.anim * 8.2) * 8;
+    return this.player.x + this.catLead() + Math.sin(this.player.anim * 8.2) * 6 + this.cat.sway * 16;
   }
 
   private stepCat(dt: number) {
     if (this.charId !== "osha") return;
-    const g = this.ground;
+    this.cat.y = this.ground;
     const x = this.player.x + this.catLead();
     let ahead: Obstacle | null = null;
     let best = Infinity;
     for (const o of this.obstacles) {
       if (!o.active) continue;
       const dist = o.x - x;
-      if (dist < -o.w) continue;
+      if (dist < -o.w - 12) continue;
       if (dist < best) {
         best = dist;
         ahead = o;
       }
     }
 
-    const jumpAt = this.speed * 0.26;
-    const slideAt = this.speed * 0.18;
-    if (ahead && this.cat.grounded && !this.cat.sliding) {
-      const dist = ahead.x - x;
-      if (ahead.kind === "tunnel" || ahead.kind === "pipe") {
-        if (dist < slideAt + 24) {
-          this.cat.sliding = true;
-          this.cat.slideT = Math.max(0.5, (ahead.w + 50) / Math.max(220, this.speed));
-        }
-      } else if (dist < jumpAt && dist > -12) {
-        this.cat.vy = JUMP_VEL * 0.98;
-        this.cat.grounded = false;
+    let want = 0;
+    if (ahead) {
+      const local = x - ahead.x;
+      const inside = local > -28 && local < ahead.w + 18;
+      if (ahead.kind === "weave") {
+        want = Math.sin((local / Math.max(24, ahead.w)) * Math.PI * 5) * 1.15;
+      } else if (inside || (ahead.x - x < this.speed * 0.22 && ahead.x - x > -20)) {
+        want = this.cat.side * 1.05;
+      }
+      if (local > ahead.w + 4 && this.cat.marked !== ahead.x) {
+        this.cat.side *= -1;
+        this.cat.marked = ahead.x;
       }
     }
-
-    if (this.cat.sliding) {
-      this.cat.slideT -= dt;
-      if (ahead && (ahead.kind === "tunnel" || ahead.kind === "pipe") && x < ahead.x + ahead.w + 16) {
-        this.cat.sliding = true;
-        this.cat.slideT = Math.max(this.cat.slideT, 0.06);
-      } else if (this.cat.slideT <= 0) {
-        this.cat.sliding = false;
-      }
-    }
-
-    this.cat.vy = Math.min(MAX_FALL, this.cat.vy + GRAVITY * dt);
-    this.cat.y += this.cat.vy * dt;
-    if (this.cat.y >= g) {
-      this.cat.y = g;
-      this.cat.vy = 0;
-      this.cat.grounded = true;
-    } else {
-      this.cat.grounded = false;
-      this.cat.sliding = false;
-    }
+    const k = 1 - Math.exp(-14 * dt);
+    this.cat.sway += (want - this.cat.sway) * k;
   }
 
   private land() {
@@ -1290,13 +1268,14 @@ export class PacklineGame {
     this.drawHills();
     this.drawTrees();
     this.drawGround();
+    this.drawCat("back");
     this.drawCoins();
     this.drawPickups();
     this.drawObstacles(false);
     this.drawTunnels(false);
     this.drawBursts();
     this.drawPlayer();
-    this.drawCat();
+    this.drawCat("front");
     this.drawTunnels(true);
     this.drawObstacles(true);
     this.drawParticles();
@@ -1625,33 +1604,34 @@ export class PacklineGame {
     }
   }
 
-  private drawCat() {
+  private drawCat(layer: "back" | "front") {
     if (this.charId !== "osha") return;
     if (this.phase === "boot") return;
+    const behind = this.cat.sway > 0.12;
+    if (layer === "back" && !behind) return;
+    if (layer === "front" && behind) return;
     const spr = this.sprites;
     const ctx = this.ctx;
     const t = this.player.anim;
     const x = this.catX();
-    const y = this.cat.y + Math.sin(t * 14) * (this.cat.grounded && !this.cat.sliding ? 1.4 : 0);
+    const depth = Math.abs(this.cat.sway);
+    const scale = 1 - depth * 0.28;
+    const y = this.ground + depth * 8 + Math.sin(t * 14) * 1.2;
     ctx.save();
+    ctx.globalAlpha = behind ? 0.92 : 1;
     ctx.fillStyle = "rgba(8,10,12,0.28)";
     ctx.beginPath();
-    ctx.ellipse(x, this.ground + 4, this.cat.sliding ? 18 : 14, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, this.ground + 4 + depth * 6, 14 * scale, 4 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
-    const airborne = !this.cat.grounded;
-    const frames = airborne || this.cat.sliding ? spr?.catJump : spr?.catRun;
-    let idx = Math.floor(t * (airborne ? 9 : 12)) % 4;
-    if (this.cat.sliding) idx = 0;
-    else if (airborne) idx = this.cat.vy < -200 ? 1 : Math.abs(this.cat.vy) < 140 ? 2 : 3;
-    const frame = frames ? frames[idx]! : null;
-    const h = (this.cat.sliding ? 42 : 78) * (airborne ? 1.06 : 1);
-    const w = this.cat.sliding ? 92 : 84;
+    const frame = spr?.catRun[Math.floor(t * 13) % 4] ?? null;
+    const h = 78 * scale;
+    const w = 84 * scale;
     if (frame) {
       ctx.drawImage(frame, x - w * 0.5, y - h + 6, w, h);
     } else {
       ctx.fillStyle = "#d9843a";
       ctx.beginPath();
-      ctx.ellipse(x, y - (this.cat.sliding ? 12 : 18), 16, this.cat.sliding ? 8 : 12, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y - 18 * scale, 16 * scale, 12 * scale, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
