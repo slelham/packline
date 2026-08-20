@@ -39,22 +39,23 @@ export type HudState = {
 
 export type HudListener = (s: HudState) => void;
 
-const BASE_SPEED = 350;
-const MAX_SPEED = 900;
-const GRAVITY = 2480;
-const JUMP_VEL = -860;
-const MAX_FALL = 1480;
-const COYOTE = 0.09;
-const SLIDE_TIME = 0.55;
+const BASE_SPEED = 320;
+const MAX_SPEED = 740;
+const GRAVITY = 2100;
+const JUMP_VEL = -840;
+const MAX_FALL = 1320;
+const COYOTE = 0.16;
+const JUMP_BUF = 0.14;
+const SLIDE_TIME = 0.72;
 const HITSTOP = 0.08;
 const DIE_TIME = 0.78;
 const PLAY_W = 1080;
 const PLAY_H = 700;
-const TUNNEL_GAP = 76;
+const TUNNEL_GAP = 82;
 const HOOP_H = 318;
 const HOOP_W = 128;
-const HOOP_HOLE_TOP = 278;
-const HOOP_HOLE_H = 232;
+const HOOP_HOLE_TOP = 286;
+const HOOP_HOLE_H = 262;
 
 type Kind = "hurdle" | "hoop" | "tunnel" | "weave" | "crate" | "hydrant" | "pipe";
 
@@ -100,7 +101,9 @@ function clamp(v: number, a: number, b: number) {
 }
 
 function aabb(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) {
-  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  const ox = Math.min(ax + aw, bx + bw) - Math.max(ax, bx);
+  const oy = Math.min(ay + ah, by + bh) - Math.max(ay, by);
+  return ox > 10 && oy > 8;
 }
 
 function mulberry32(seed: number) {
@@ -191,6 +194,7 @@ export class PacklineGame {
   private hudKey = "";
   private resizeObs: ResizeObserver | null = null;
   private startGrace = 0;
+  private jumpBuf = 0;
   private titleT = 0;
   private runTreats = 0;
   private shieldT = 0;
@@ -258,7 +262,7 @@ export class PacklineGame {
     this.audio.unlock();
     this.resetRun();
     this.phase = "playing";
-    this.startGrace = 0.2;
+    this.startGrace = 0.32;
     this.hudKey = "";
     this.emitHud();
   }
@@ -269,7 +273,7 @@ export class PacklineGame {
     this.audio.unlock();
     this.resetRun();
     this.phase = "playing";
-    this.startGrace = 0.16;
+    this.startGrace = 0.28;
     this.hudKey = "";
     this.emitHud();
   }
@@ -592,6 +596,7 @@ export class PacklineGame {
     this.lastKind = null;
     this.hitstop = 0;
     this.startGrace = 0;
+    this.jumpBuf = 0;
     this.dieT = 0;
     this.trauma = 0;
     this.flash = 0;
@@ -743,30 +748,30 @@ export class PacklineGame {
     const g = this.ground;
     const peak = this.jumpPeak();
     const stand = 80 * this.dog().hitH;
-    let w = 72;
-    let h = Math.round(lerp(44, 62, p));
+    let w = 64;
+    let h = Math.round(lerp(36, 46, p));
     let gap = 0;
     if (kind === "hoop") {
       w = HOOP_W;
       h = HOOP_H;
       gap = HOOP_HOLE_TOP;
     } else if (kind === "tunnel") {
-      w = clamp(this.viewW * lerp(0.42, 0.7, p), 160, 360);
+      w = clamp(this.viewW * lerp(0.36, 0.58, p), 140, 280);
       h = 28;
       gap = TUNNEL_GAP;
     } else if (kind === "weave") {
-      w = 52;
-      h = 70;
+      w = 36;
+      h = 48;
     } else if (kind === "crate") {
-      w = 70;
-      h = 58;
+      w = 58;
+      h = 46;
     } else if (kind === "hydrant") {
-      w = 38;
-      h = 64;
+      w = 32;
+      h = 50;
     } else if (kind === "pipe") {
-      w = clamp(this.viewW * 0.28, 110, 180);
+      w = clamp(this.viewW * 0.22, 90, 150);
       h = 24;
-      gap = TUNNEL_GAP + 2;
+      gap = TUNNEL_GAP + 6;
     }
     o.active = true;
     o.kind = kind;
@@ -839,14 +844,14 @@ export class PacklineGame {
     const p = this.player;
     const d = this.dog();
     if (p.sliding) {
-      const h = 38 * d.hitH;
-      const w = 78 * d.hitW;
-      return { x: p.x - w * 0.4, y: this.ground - h, w, h };
+      const h = 32 * d.hitH;
+      const w = 70 * d.hitW;
+      return { x: p.x - w * 0.38, y: this.ground - h, w, h };
     }
     const air = !p.grounded;
-    const h = (air ? 58 : 80) * d.hitH;
-    const w = 44 * d.hitW;
-    return { x: p.x - w * 0.45, y: p.y - h, w, h };
+    const h = (air ? 50 : 68) * d.hitH;
+    const w = 36 * d.hitW;
+    return { x: p.x - w * 0.42, y: p.y - h + (air ? 6 : 2), w, h };
   }
 
   private stepPlayer(dt: number) {
@@ -888,18 +893,21 @@ export class PacklineGame {
       this.emitParticle(p.x, this.ground - 6, -80, -10, 0.3, 5, "#c4a66a");
     }
 
-    if ((p.grounded || p.coyote > 0) && this.input.consumeJump()) {
+    if (this.input.consumeJump()) this.jumpBuf = JUMP_BUF;
+    this.jumpBuf = Math.max(0, this.jumpBuf - dt);
+    if ((p.grounded || p.coyote > 0) && this.jumpBuf > 0) {
       p.vy = JUMP_VEL * this.dog().jump;
       p.grounded = false;
       p.coyote = 0;
+      this.jumpBuf = 0;
       p.sliding = false;
       p.jumpStretch = 0.16;
       p.squash = 0.78;
       this.audio.jump();
     }
 
-    if (!p.grounded && !this.input.jumpHeld && p.vy < -240) {
-      p.vy *= 0.52;
+    if (!p.grounded && !this.input.jumpHeld && p.vy < -420) {
+      p.vy *= 0.78;
     }
 
     const targetSquash = p.grounded ? (p.landKick > 0 ? 0.82 : 1) : p.vy < 0 ? 1.16 : 1.04;
@@ -964,15 +972,22 @@ export class PacklineGame {
   }
 
   private collides(box: { x: number; y: number; w: number; h: number }, o: Obstacle) {
+    const padX = o.kind === "hoop" ? o.w * 0.28 : o.kind === "weave" ? 8 : 12;
+    const x = o.x + padX;
+    const w = Math.max(16, o.w - padX * 2);
     if (o.kind === "hoop" && o.holeH > 0) {
-      const topH = o.holeY - o.y;
-      const botY = o.holeY + o.holeH;
-      const botH = o.y + o.h - botY;
-      const hitTop = topH > 2 && aabb(box.x, box.y, box.w, box.h, o.x, o.y, o.w, topH);
-      const hitBot = botH > 2 && aabb(box.x, box.y, box.w, box.h, o.x, botY, o.w, botH);
+      const topH = Math.max(0, o.holeY - o.y - 8);
+      const botY = o.holeY + o.holeH + 10;
+      const botH = Math.max(0, o.y + o.h - botY - 4);
+      const hitTop = topH > 8 && aabb(box.x, box.y, box.w, box.h, x, o.y, w, topH);
+      const hitBot = botH > 6 && aabb(box.x, box.y, box.w, box.h, x, botY, w, botH);
       return hitTop || hitBot;
     }
-    return aabb(box.x, box.y, box.w, box.h, o.x, o.y, o.w, o.h);
+    if (o.kind === "tunnel" || o.kind === "pipe") {
+      return aabb(box.x, box.y, box.w, box.h, x, o.y + 10, w, Math.max(8, o.h - 12));
+    }
+    const top = o.kind === "hurdle" || o.kind === "crate" || o.kind === "hydrant" ? 10 : 6;
+    return aabb(box.x, box.y, box.w, box.h, x, o.y + top, w, Math.max(12, o.h - top - 4));
   }
 
   private stepObstacles(_dt: number) {
