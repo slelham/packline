@@ -50,6 +50,11 @@ const HITSTOP = 0.08;
 const DIE_TIME = 0.78;
 const PLAY_W = 1080;
 const PLAY_H = 700;
+const TUNNEL_GAP = 76;
+const HOOP_H = 318;
+const HOOP_W = 128;
+const HOOP_HOLE_TOP = 278;
+const HOOP_HOLE_H = 232;
 
 type Kind = "hurdle" | "hoop" | "tunnel" | "weave" | "crate" | "hydrant" | "pipe";
 
@@ -450,29 +455,20 @@ export class PacklineGame {
   private sitObstacle(o: Obstacle) {
     const g = this.ground;
     if (o.kind === "tunnel") {
-      o.h = 26;
+      o.h = 28;
       o.y = g - o.gap - o.h;
     } else if (o.kind === "pipe") {
-      o.h = 20;
+      o.h = 22;
       o.y = g - o.gap;
     } else if (o.kind === "hoop") {
+      o.h = HOOP_H;
+      o.w = HOOP_W;
       o.y = g - o.h;
-      o.holeY = g - o.gap;
+      o.holeY = g - HOOP_HOLE_TOP;
+      o.holeH = HOOP_HOLE_H;
     } else {
       o.y = g - o.h;
     }
-  }
-
-  private bodyH() {
-    return 80 * this.dog().hitH;
-  }
-
-  private airH() {
-    return 58 * this.dog().hitH;
-  }
-
-  private slideH() {
-    return 38 * this.dog().hitH;
   }
 
   private jumpPeak() {
@@ -480,19 +476,8 @@ export class PacklineGame {
     return (v * v) / (2 * GRAVITY);
   }
 
-  private dogS() {
-    return this.dog().scale;
-  }
-
-  private tunnelGap() {
-    const stand = this.bodyH();
-    const slide = this.slideH();
-    if (this.dog().id === "teddy") return stand + 16;
-    return slide + 18;
-  }
-
   private mustSlideTunnel() {
-    return this.bodyH() > this.tunnelGap() - 8;
+    return 80 * this.dog().hitH > TUNNEL_GAP - 8;
   }
 
   private loop = (t: number) => {
@@ -738,41 +723,33 @@ export class PacklineGame {
     const o = this.obstacles.find((n) => !n.active);
     if (!o) return null;
     const p = this.progress();
-    const s = this.dogS();
     const g = this.ground;
     const peak = this.jumpPeak();
-    const air = this.airH();
-    const body = this.bodyH();
-    let w = Math.round(68 * s);
-    let h = Math.round(lerp(40, 56, p) * s);
+    const stand = 80 * this.dog().hitH;
+    let w = 72;
+    let h = Math.round(lerp(44, 62, p));
     let gap = 0;
-    let holeH = 0;
     if (kind === "hoop") {
-      const rim = clamp(26 * s, 20, 40);
-      holeH = clamp(air * 1.7 + 28, 100, 240);
-      const mid = peak * 0.5 + air * 0.45;
-      gap = clamp(mid + holeH * 0.5, rim + holeH * 0.65, peak + air - 12);
-      h = gap + clamp(34 * s, 28, 48);
-      w = clamp(96 * s + 20, 92, 136);
+      w = HOOP_W;
+      h = HOOP_H;
+      gap = HOOP_HOLE_TOP;
     } else if (kind === "tunnel") {
-      w = clamp(this.viewW * lerp(0.4, 0.66, p), 150, 340);
-      h = 26;
-      gap = this.tunnelGap();
+      w = clamp(this.viewW * lerp(0.42, 0.7, p), 160, 360);
+      h = 28;
+      gap = TUNNEL_GAP;
     } else if (kind === "weave") {
-      w = Math.round(48 * s);
-      h = Math.round(62 * s);
+      w = 52;
+      h = 70;
     } else if (kind === "crate") {
-      w = Math.round(64 * s);
-      h = Math.round(clamp(peak * 0.34, 36, 62) * (0.92 + p * 0.08));
+      w = 70;
+      h = 58;
     } else if (kind === "hydrant") {
-      w = Math.round(34 * s);
-      h = Math.round(58 * s);
+      w = 38;
+      h = 64;
     } else if (kind === "pipe") {
-      w = clamp(this.viewW * 0.26, 100, 170);
-      h = 20;
-      gap = this.tunnelGap() + 4;
-    } else {
-      h = Math.round(clamp(peak * 0.32, 34, 58) * (0.9 + p * 0.12));
+      w = clamp(this.viewW * 0.28, 110, 180);
+      h = 24;
+      gap = TUNNEL_GAP + 2;
     }
     o.active = true;
     o.kind = kind;
@@ -780,28 +757,27 @@ export class PacklineGame {
     o.w = w;
     o.h = h;
     o.gap = gap;
-    o.holeH = holeH;
+    o.holeH = 0;
     o.scored = false;
     o.near = 999;
     o.special = false;
     o.holeY = 0;
     this.sitObstacle(o);
 
-    const coinR = 10 + 6 * s;
     if (kind === "hoop") {
-      this.placeCoin(x + w * 0.5, o.holeY + o.holeH * 0.5, coinR);
-    } else if (kind !== "tunnel" && kind !== "pipe" && Math.random() < 0.58) {
+      this.placeCoin(x + w * 0.5, o.holeY + o.holeH * 0.5);
+    } else if (kind !== "tunnel" && kind !== "pipe" && Math.random() < 0.55) {
       const n = 2 + Math.floor(Math.random() * 2);
-      const lift = clamp(body * 0.35 + peak * 0.22, 36, 88);
+      const lift = clamp(stand * 0.55 + peak * 0.18, 48, 92);
       for (let i = 0; i < n; i++) {
         const t = i / Math.max(1, n - 1);
-        this.placeCoin(x + w * t, g - lift - Math.sin(t * Math.PI) * peak * 0.16, coinR);
+        this.placeCoin(x + w * t, g - lift - Math.sin(t * Math.PI) * 22);
       }
     }
     return o;
   }
 
-  private placeCoin(x: number, y: number, r = 14) {
+  private placeCoin(x: number, y: number, r = 15) {
     const c = this.coins.find((n) => !n.active);
     if (!c) return;
     c.active = true;
@@ -816,8 +792,9 @@ export class PacklineGame {
     const r = Math.random();
     u.active = true;
     u.kind = r < 0.38 ? "shield" : r < 0.72 ? "magnet" : "frenzy";
+    const stand = 80 * this.dog().hitH;
     u.x = x;
-    u.y = this.ground - this.bodyH() * 0.55 - 22;
+    u.y = this.ground - clamp(stand * 0.7 + 24, 70, 110);
   }
 
   private bumpMissions() {
@@ -1448,39 +1425,34 @@ export class PacklineGame {
         let dy = g - dh + 8;
         if (o.kind === "hoop") {
           img = spr.hoop;
-          dw = o.w * 2.28;
-          dh = o.h * 1.04;
+          dw = 292;
+          dh = 328;
           dx = o.x + o.w * 0.5 - dw * 0.5;
-          dy = g - dh + 8;
+          dy = g - dh + 10;
         } else if (o.kind === "weave") {
           img = spr.weave;
-          dw = o.w + 36 * this.dogS();
-          dh = o.h + 24 * this.dogS();
-          dx = o.x - 18 * this.dogS();
+          dw = o.w + 36;
+          dh = o.h + 28;
+          dx = o.x - 18;
           dy = g - dh + 6;
         } else if (o.kind === "crate") {
           img = spr.crate;
           dw = o.w + 16;
-          dh = o.h + 16;
+          dh = o.h + 18;
           dx = o.x - 8;
           dy = g - dh + 6;
         } else if (o.kind === "hydrant") {
           img = spr.hydrant;
-          dw = o.w + 20;
-          dh = o.h + 14;
-          dx = o.x - 10;
+          dw = o.w + 22;
+          dh = o.h + 16;
+          dx = o.x - 11;
           dy = g - dh + 4;
         } else if (o.kind === "pipe") {
           img = spr.pipe;
           dw = o.w + 24;
-          dh = 28;
+          dh = 32;
           dx = o.x - 12;
-          dy = o.y - 5;
-        } else {
-          dw = o.w + 26 * this.dogS();
-          dh = o.h + 20 * this.dogS();
-          dx = o.x - 13 * this.dogS();
-          dy = g - dh + 8;
+          dy = o.y - 6;
         }
         this.ctx.drawImage(img, dx, dy, dw, dh);
       } else {
@@ -1499,7 +1471,7 @@ export class PacklineGame {
       this.sitObstacle(o);
       const x = o.x;
       const w = o.w;
-      const h = o.gap + 26;
+      const h = TUNNEL_GAP + 26;
       const top = g - h + 4;
       const cy = g - h * 0.5 + 2;
       const holeR = 20;
@@ -1539,10 +1511,9 @@ export class PacklineGame {
       if (!c.active) continue;
       if (c.x < -30 || c.x > this.viewW + 30) continue;
       const bob = Math.sin(t * 6 + c.x * 0.02) * 4;
-      const size = c.r * 2.15;
       if (spr) {
         const frame = spr.coin[Math.floor(t * 8) % spr.coin.length]!;
-        this.ctx.drawImage(frame, c.x - size * 0.5, c.y + bob - size * 0.5, size, size);
+        this.ctx.drawImage(frame, c.x - 16, c.y + bob - 16, 32, 32);
       } else {
         this.ctx.fillStyle = "#c6e04a";
         this.ctx.beginPath();
@@ -1583,7 +1554,7 @@ export class PacklineGame {
       : undefined;
     if (tube) {
       ctx.beginPath();
-      ctx.rect(tube.x + 6, this.ground - tube.gap - 6, tube.w - 12, tube.gap + 10);
+      ctx.rect(tube.x + 6, this.ground - TUNNEL_GAP - 6, tube.w - 12, TUNNEL_GAP + 10);
       ctx.clip();
       ctx.filter = "brightness(0.72)";
     }
