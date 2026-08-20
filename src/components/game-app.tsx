@@ -244,13 +244,13 @@ export function GameApp() {
       {overlay === "title" || overlay === "boot" ? (
         <div
           data-ui
-          className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/95 to-transparent px-4 pt-16 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-[max(0.85rem,env(safe-area-inset-bottom))]"
         >
           <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
           <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
           <p className="mt-1 text-center text-sm text-muted">Tap a dog. Chain hoops. Bank treats.</p>
           {hud.missions.length > 0 ? (
-            <ul className="mx-auto mt-3 grid max-w-md grid-cols-1 gap-1.5 sm:grid-cols-3">
+            <ul className="mx-auto mt-3 grid max-w-md grid-cols-3 gap-1.5">
               {hud.missions.map((m) => (
                 <li
                   key={m.id}
@@ -268,7 +268,7 @@ export function GameApp() {
               ))}
             </ul>
           ) : null}
-          <div className="mx-auto mt-3 grid max-w-md grid-cols-3 gap-2">
+          <div className="mx-auto mt-3 grid max-w-md grid-cols-2 gap-2 sm:grid-cols-4">
             {DOG_IDS.map((id) => {
               const d = DOGS[id];
               const selected = hud.character === id;
@@ -280,15 +280,15 @@ export function GameApp() {
                   onPointerDown={(e) => playDog(id, e)}
                   onClick={(e) => playDog(id, e)}
                   className={cn(
-                    "min-h-24 rounded-lg border bg-bg/80 px-1 py-2 backdrop-blur-sm",
+                    "min-h-[5.5rem] rounded-lg border bg-bg/80 px-1 py-1.5 backdrop-blur-sm",
                     selected ? "border-accent bg-elevated" : "border-border",
                   )}
                 >
                   <img
-                    src={`/sprites/${id}/run-1.png`}
+                    src={`/sprites/${id}/run-1.png?v=bandana`}
                     alt=""
                     draggable={false}
-                    className="pointer-events-none mx-auto h-14 w-14 object-contain"
+                    className="pointer-events-none mx-auto h-11 w-11 object-contain"
                   />
                   <p className="mt-1 text-center text-sm font-medium">{d.name}</p>
                   <p className="text-center text-[10px] text-accent">{d.blurb}</p>
@@ -382,27 +382,25 @@ export function GameApp() {
       {playing ? (
         <div
           data-ui
-          className="absolute inset-x-0 bottom-0 z-30 grid grid-cols-2 gap-3 px-3 pt-2 pb-[max(0.85rem,env(safe-area-inset-bottom))]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-end justify-between px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))]"
         >
           <button
             type="button"
             data-ui
             aria-label="Jump"
-            className="flex h-16 items-center justify-center gap-2 rounded-lg border border-border bg-surface/85 text-base font-semibold backdrop-blur-sm"
+            className="pointer-events-auto flex size-12 items-center justify-center rounded-full border border-border bg-surface/55 text-fg backdrop-blur-sm"
             {...jumpHold}
           >
-            <ChevronsUp className="size-6" />
-            Jump
+            <ChevronsUp className="size-5" />
           </button>
           <button
             type="button"
             data-ui
             aria-label="Slide"
-            className="flex h-16 items-center justify-center gap-2 rounded-lg bg-accent text-base font-semibold text-accent-fg"
+            className="pointer-events-auto flex size-12 items-center justify-center rounded-full bg-accent/90 text-accent-fg"
             {...slideHold}
           >
-            <ChevronsDown className="size-6" />
-            Slide
+            <ChevronsDown className="size-5" />
           </button>
         </div>
       ) : null}

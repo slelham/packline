@@ -62,11 +62,7 @@ export async function loadSprites(): Promise<SpriteBank> {
     loadImage("/sprites/obstacles/pipe.png"),
   ]);
   return {
-    dogs: {
-      remy: dogs[0]!,
-      teddy: dogs[1]!,
-      osha: dogs[2]!,
-    },
+    dogs: Object.fromEntries(DOG_IDS.map((id, i) => [id, dogs[i]!])) as Record<DogId, ActionSheets>,
     coin,
     impact,
     dust,
