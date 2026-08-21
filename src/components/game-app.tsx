@@ -151,9 +151,10 @@ export function GameApp() {
   }
 
   function shareRun() {
-    const text = `${dog.name} ran ${formatScore(hud.score)} on Packline`;
+    const url = "https://packline-eight.vercel.app";
+    const text = `${dog.name} ran ${formatScore(hud.score)} on Packline — ${url}`;
     if (navigator.share) {
-      void navigator.share({ title: "Packline", text }).catch(() => {});
+      void navigator.share({ title: "Packline", text, url }).catch(() => {});
     } else if (navigator.clipboard) {
       void navigator.clipboard.writeText(text);
     }
