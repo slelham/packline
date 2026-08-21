@@ -302,7 +302,7 @@ export function GameApp() {
             >
               <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
               <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
-              <p className="mt-1 text-center text-sm text-muted">Treats are the score. Course gets meaner as you go.</p>
+              <p className="mt-1 text-center text-sm text-muted">Jump the tables. The steak at the end is 50.</p>
               <div className="mx-auto mt-3 w-full max-w-md">
                 <p className="mb-1 text-[10px] tracking-[0.28em] text-muted uppercase">Park board</p>
                 <PackBoard rows={board} compact />
@@ -364,7 +364,7 @@ export function GameApp() {
               >
                 Run {dog.name}
               </Button>
-              <p className="mt-2 text-center text-xs text-subtle">One treat. One point. Star treats count double.</p>
+              <p className="mt-2 text-center text-xs text-subtle">Treats +1. Steak +50. Slide tunnels for a star.</p>
             </div>
           ) : null}
 

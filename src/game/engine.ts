@@ -58,7 +58,7 @@ const HOOP_W = 128;
 const HOOP_HOLE_TOP = 286;
 const HOOP_HOLE_H = 262;
 
-type Kind = "hurdle" | "hoop" | "tunnel" | "weave" | "crate" | "hydrant" | "pipe";
+type Kind = "hurdle" | "hoop" | "tunnel" | "weave" | "crate" | "hydrant" | "pipe" | "plat";
 
 type Obstacle = {
   active: boolean;
@@ -368,7 +368,7 @@ export class PacklineGame {
   }
 
   private pool() {
-    this.obstacles = Array.from({ length: 22 }, () => ({
+    this.obstacles = Array.from({ length: 28 }, () => ({
       active: false,
       kind: "hurdle" as Kind,
       x: 0,
@@ -382,7 +382,7 @@ export class PacklineGame {
       near: 999,
       special: false,
     }));
-    this.coins = Array.from({ length: 24 }, () => ({ active: false, x: 0, y: 0, r: 16, skin: 0 }));
+    this.coins = Array.from({ length: 36 }, () => ({ active: false, x: 0, y: 0, r: 16, skin: 0 }));
     this.particles = Array.from({ length: 40 }, () => ({
       active: false,
       x: 0,
@@ -484,6 +484,9 @@ export class PacklineGame {
       o.y = g - o.h;
       o.holeY = g - HOOP_HOLE_TOP;
       o.holeH = HOOP_HOLE_H;
+    } else if (o.kind === "plat") {
+      o.h = 18;
+      o.y = g - o.gap;
     } else {
       o.y = g - o.h;
     }
@@ -703,6 +706,14 @@ export class PacklineGame {
     if (spawnX > this.viewW + lead) return;
 
     const kind = this.pickKind(p);
+    if (kind === "plat") {
+      const last = this.spawnPlatforms(spawnX);
+      const span = last ? last.x + last.w - spawnX : 220;
+      this.lastKind = "plat";
+      this.nextSpawn = spawnX + Math.max(minGap, span + 110);
+      this.spawnCount += 1;
+      return;
+    }
     const extra = kind === "tunnel" ? this.speed * 0.12 : 0;
     const first = this.placeObstacle(kind, spawnX + extra);
     this.lastKind = kind;
@@ -722,11 +733,17 @@ export class PacklineGame {
 
   private pickKind(p: number): Kind {
     const r = Math.random();
+    if (this.lastKind === "plat") {
+      if (r < 0.4) return "hoop";
+      if (r < 0.7) return "hurdle";
+      return "weave";
+    }
     if (this.lastKind === "tunnel" || this.lastKind === "pipe") {
       if (r < 0.45) return "hoop";
       if (r < 0.7) return "hurdle";
       return p > 0.5 ? "crate" : "weave";
     }
+    if (p > 0.14 && r < 0.18) return "plat";
     if (p < 0.1) return r < 0.58 ? "hurdle" : "hoop";
     if (p < 0.22) {
       if (r < 0.38) return "hoop";
@@ -788,6 +805,10 @@ export class PacklineGame {
       w = clamp(this.viewW * 0.22, 90, 150);
       h = 24;
       gap = TUNNEL_GAP + 6;
+    } else if (kind === "plat") {
+      w = lerp(150, 210, Math.random());
+      h = 18;
+      gap = clamp(this.jumpPeak() * 0.4, 70, 108);
     }
     o.active = true;
     o.kind = kind;
@@ -808,7 +829,7 @@ export class PacklineGame {
       this.placeCoin(x + w * 0.5, g - o.gap - 36);
       this.placeCoin(x + w * 0.32, g - 26);
       this.placeCoin(x + w * 0.68, g - 26);
-    } else if (kind !== "pipe") {
+    } else if (kind !== "pipe" && kind !== "plat") {
       const n = 1 + Math.floor(Math.random() * 3);
       const lift = clamp(stand * 0.55 + peak * 0.18, 48, 92);
       for (let i = 0; i < n; i++) {
@@ -819,14 +840,36 @@ export class PacklineGame {
     return o;
   }
 
-  private placeCoin(x: number, y: number, r = 15) {
+  private spawnPlatforms(x: number) {
+    const p = this.progress();
+    const n = p > 0.5 && Math.random() < 0.45 ? 3 : 2;
+    const rise = clamp(this.jumpPeak() * 0.4, 70, 110);
+    let cx = x;
+    let last: Obstacle | null = null;
+    for (let i = 0; i < n; i++) {
+      const o = this.placeObstacle("plat", cx);
+      if (!o) break;
+      o.gap = rise + (i === 1 ? 16 : 0);
+      this.sitObstacle(o);
+      const treats = 1 + (Math.random() < 0.5 ? 1 : 0);
+      for (let t = 0; t < treats; t++) {
+        this.placeCoin(o.x + o.w * (0.28 + t * 0.28), o.y - 22);
+      }
+      last = o;
+      cx += o.w + lerp(52, 88, p);
+    }
+    if (last) this.placeCoin(last.x + last.w - 26, last.y - 38, 22, 2);
+    return last;
+  }
+
+  private placeCoin(x: number, y: number, r = 15, skin?: number) {
     const c = this.coins.find((n) => !n.active);
     if (!c) return;
     c.active = true;
     c.x = x;
     c.y = y;
     c.r = r;
-    c.skin = Math.random() < 0.42 ? 1 : 0;
+    c.skin = skin ?? (Math.random() < 0.42 ? 1 : 0);
   }
 
   private placePickup(x: number) {
@@ -895,19 +938,32 @@ export class PacklineGame {
     else p.coyote = Math.max(0, p.coyote - dt);
 
     p.vy = Math.min(MAX_FALL, p.vy + GRAVITY * dt);
+    const prevY = p.y;
     p.y += p.vy * dt;
 
-    if (p.y >= this.ground) {
+    let floor = this.ground;
+    if (p.vy >= -60) {
+      for (const o of this.obstacles) {
+        if (!o.active || o.kind !== "plat") continue;
+        this.sitObstacle(o);
+        const top = o.y;
+        const over = p.x > o.x + 10 && p.x < o.x + o.w - 8;
+        if (over && prevY <= top + 20 && p.y >= top - 3) floor = Math.min(floor, top);
+      }
+    }
+
+    if (p.y >= floor) {
       if (!p.grounded) this.land();
-      p.y = this.ground;
+      p.y = floor;
       p.vy = 0;
       p.grounded = true;
     } else {
       p.grounded = false;
     }
 
+    const onFloor = p.grounded && p.y >= this.ground - 6;
     const tapSlide = this.input.consumeSlide();
-    if (p.grounded && (tapSlide || (this.input.slideHeld && !p.sliding))) {
+    if (onFloor && (tapSlide || (this.input.slideHeld && !p.sliding))) {
       if (!p.sliding) this.audio.slide();
       p.sliding = true;
       p.slideT = SLIDE_TIME * this.dog().slide;
@@ -986,9 +1042,9 @@ export class PacklineGame {
     p.squash = 0.76;
     p.stretch = 1.22;
     this.audio.land();
-    this.spawnBurst(p.x, this.ground, "dust");
+    this.spawnBurst(p.x, p.y, "dust");
     for (let i = 0; i < 4; i++) {
-      this.emitParticle(p.x, this.ground - 2, -60 + Math.random() * 80, -80 + Math.random() * 30, 0.3, 4, "#d8c08a");
+      this.emitParticle(p.x, p.y - 2, -60 + Math.random() * 80, -80 + Math.random() * 30, 0.3, 4, "#d8c08a");
     }
   }
 
@@ -996,6 +1052,10 @@ export class PacklineGame {
     const padX = o.kind === "hoop" ? o.w * 0.28 : o.kind === "weave" ? 8 : 12;
     const x = o.x + padX;
     const w = Math.max(16, o.w - padX * 2);
+    if (o.kind === "plat") {
+      if (box.y + box.h <= o.y + 12) return false;
+      return aabb(box.x, box.y, box.w, box.h, o.x + 2, o.y, 14, o.h);
+    }
     if (o.kind === "hoop" && o.holeH > 0) {
       const topH = Math.max(0, o.holeY - o.y - 8);
       const botY = o.holeY + o.holeH + 10;
@@ -1026,6 +1086,7 @@ export class PacklineGame {
       }
       this.sitObstacle(o);
       if (this.collides(box, o)) {
+        if (o.kind === "plat") continue;
         if (this.boostT > 0) {
           this.smash(o);
           continue;
@@ -1090,14 +1151,16 @@ export class PacklineGame {
         continue;
       }
       if (this.magnetT > 0 || this.boostT > 0) {
-        const mx = px - c.x;
-        const my = py - c.y;
-        const mag = Math.hypot(mx, my) || 1;
-        const range = this.boostT > 0 ? 340 : 240;
-        const pull = this.boostT > 0 ? 680 : 420;
-        if (mag < range) {
-          c.x += (mx / mag) * pull * (1 / 60);
-          c.y += (my / mag) * pull * (1 / 60);
+        if (c.skin !== 2) {
+          const mx = px - c.x;
+          const my = py - c.y;
+          const mag = Math.hypot(mx, my) || 1;
+          const range = this.boostT > 0 ? 340 : 240;
+          const pull = this.boostT > 0 ? 680 : 420;
+          if (mag < range) {
+            c.x += (mx / mag) * pull * (1 / 60);
+            c.y += (my / mag) * pull * (1 / 60);
+          }
         }
       }
       const cx = clamp(c.x, box.x, box.x + box.w);
@@ -1106,12 +1169,13 @@ export class PacklineGame {
       const dy = c.y - cy;
       if (dx * dx + dy * dy < c.r * c.r) {
         c.active = false;
-        this.runTreats += 1;
-        const gain = this.boostT > 0 || this.frenzyT > 0 ? 2 : 1;
+        const steak = c.skin === 2;
+        if (!steak) this.runTreats += 1;
+        const gain = steak ? 50 : this.boostT > 0 || this.frenzyT > 0 ? 2 : 1;
         this.score += gain;
         this.audio.coin();
-        this.spawnFloater(c.x, c.y, `+${gain}`);
-        this.emitParticle(c.x, c.y, 0, -40, 0.4, 5, "#e8c07a");
+        this.spawnFloater(c.x, c.y, steak ? "STEAK +50" : `+${gain}`);
+        this.emitParticle(c.x, c.y, 0, -40, 0.4, steak ? 8 : 5, steak ? "#c45c56" : "#e8c07a");
         this.hudDirty = true;
       }
     }
@@ -1571,6 +1635,12 @@ export class PacklineGame {
           dh = 32;
           dx = o.x - 12;
           dy = o.y - 6;
+        } else if (o.kind === "plat") {
+          img = spr.platform;
+          dw = o.w + 28;
+          dh = Math.max(36, g - o.y + 10);
+          dx = o.x - 14;
+          dy = o.y - 6;
         }
         this.ctx.drawImage(img, dx, dy, dw, dh);
       } else {
@@ -1630,15 +1700,20 @@ export class PacklineGame {
       if (c.x < -30 || c.x > this.viewW + 30) continue;
       const bob = Math.sin(t * 6 + c.x * 0.02) * 4;
       if (spr) {
-        const pack = c.skin === 1 ? spr.cookie : spr.coin;
-        const frame = pack[Math.floor(t * 8) % pack.length]!;
-        const w = c.skin === 1 ? 34 : 44;
-        const h = c.skin === 1 ? 34 : 28;
-        this.ctx.drawImage(frame, c.x - w * 0.5, c.y + bob - h * 0.5, w, h);
+        if (c.skin === 2 && spr.steak.length) {
+          const frame = spr.steak[Math.floor(t * 8) % spr.steak.length]!;
+          this.ctx.drawImage(frame, c.x - 28, c.y + bob - 28, 56, 56);
+        } else {
+          const pack = c.skin === 1 ? spr.cookie : spr.coin;
+          const frame = pack[Math.floor(t * 8) % pack.length]!;
+          const w = c.skin === 1 ? 34 : 44;
+          const h = c.skin === 1 ? 34 : 28;
+          this.ctx.drawImage(frame, c.x - w * 0.5, c.y + bob - h * 0.5, w, h);
+        }
       } else {
-        this.ctx.fillStyle = "#d4a05a";
+        this.ctx.fillStyle = c.skin === 2 ? "#c45c56" : "#d4a05a";
         this.ctx.beginPath();
-        this.ctx.ellipse(c.x, c.y + bob, 16, 9, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(c.x, c.y + bob, c.skin === 2 ? 18 : 16, c.skin === 2 ? 12 : 9, 0, 0, Math.PI * 2);
         this.ctx.fill();
       }
     }
