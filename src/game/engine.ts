@@ -1637,6 +1637,25 @@ export class PacklineGame {
     }
   }
 
+  private contactShadow(cx: number, cy: number, rx: number, ry = 5) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = "rgba(28, 18, 8, 0.3)";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawPlanted(img: HTMLImageElement, cx: number, maxH: number, plant = 5) {
+    const dh = maxH;
+    const dw = dh * (img.width / Math.max(1, img.height));
+    const dy = this.ground - dh + plant;
+    const dx = cx - dw * 0.5;
+    this.contactShadow(cx, this.ground + 5, Math.max(16, dw * 0.26), 5);
+    this.ctx.drawImage(img, dx, dy, dw, dh);
+  }
+
   private drawObstacles(front: boolean) {
     const spr = this.sprites;
     const g = this.ground;
@@ -1647,56 +1666,36 @@ export class PacklineGame {
       if (overlay !== front) continue;
       if (o.x + o.w < -40 || o.x > this.viewW + 40) continue;
       this.sitObstacle(o);
-      if (spr) {
-        let img = spr.hurdle;
-        let dw = o.w + 28;
-        let dh = o.h + 22;
-        let dx = o.x - 14;
-        let dy = g - dh + 8;
-        if (o.kind === "hoop") {
-          img = spr.hoop;
-          dw = 292;
-          dh = 328;
-          dx = o.x + o.w * 0.5 - dw * 0.5;
-          dy = g - dh + 10;
-        } else if (o.kind === "crate") {
-          img = spr.crate;
-          dw = o.w + 18;
-          dh = o.h + 20;
-          dx = o.x - 9;
-          dy = g - dh + 6;
-        } else if (o.kind === "hydrant") {
-          img = spr.hydrant;
-          dw = o.w + 18;
-          dh = o.h + 22;
-          dx = o.x - 9;
-          dy = g - dh + 4;
-        } else if (o.kind === "pipe") {
-          img = spr.tunnel;
-          dw = o.w + 40;
-          dh = 72;
-          dx = o.x - 20;
-          dy = g - dh + 8;
-        } else if (o.kind === "plat") {
-          img = spr.platform;
-          dw = o.w + 18;
-          dh = 42;
-          dx = o.x - 9;
-          dy = o.y - 10;
-          this.ctx.fillStyle = "rgba(90, 62, 28, 0.55)";
-          this.ctx.fillRect(o.x + 10, o.y + 22, 5, Math.max(4, g - o.y - 22));
-          this.ctx.fillRect(o.x + o.w - 16, o.y + 22, 5, Math.max(4, g - o.y - 22));
-        } else {
-          img = spr.hurdle;
-          dw = o.w + 36;
-          dh = o.h + 30;
-          dx = o.x - 18;
-          dy = g - dh + 8;
-        }
-        this.ctx.drawImage(img, dx, dy, dw, dh);
-      } else {
+      const cx = o.x + o.w * 0.5;
+      if (!spr) {
         this.ctx.fillStyle = "#ece8dc";
         this.ctx.fillRect(o.x, o.y, o.w, o.h);
+        continue;
+      }
+      if (o.kind === "hoop") {
+        this.drawPlanted(spr.hoop, cx, 300, 6);
+      } else if (o.kind === "crate") {
+        this.drawPlanted(spr.crate, cx, o.h + 16, 5);
+      } else if (o.kind === "hydrant") {
+        this.drawPlanted(spr.hydrant, cx, o.h + 20, 4);
+      } else if (o.kind === "pipe") {
+        this.drawPlanted(spr.tunnel, cx, 58, 6);
+      } else if (o.kind === "plat") {
+        const ctx = this.ctx;
+        ctx.fillStyle = "#5a3a1c";
+        const stiltH = Math.max(8, g - o.y - 8);
+        ctx.fillRect(o.x + 10, o.y + 16, 7, stiltH);
+        ctx.fillRect(o.x + o.w - 16, o.y + 16, 7, stiltH);
+        ctx.fillStyle = "#6b4420";
+        ctx.fillRect(o.x + 4, g - 5, 20, 7);
+        ctx.fillRect(o.x + o.w - 22, g - 5, 20, 7);
+        this.contactShadow(o.x + 14, g + 4, 14, 4);
+        this.contactShadow(o.x + o.w - 12, g + 4, 14, 4);
+        const dw = o.w + 16;
+        const dh = 36;
+        ctx.drawImage(spr.platform, o.x - 8, o.y - 8, dw, dh);
+      } else {
+        this.drawPlanted(spr.hurdle, cx, o.h + 28, 5);
       }
     }
   }
@@ -1710,12 +1709,13 @@ export class PacklineGame {
       this.sitObstacle(o);
       const x = o.x;
       const w = o.w;
-      const h = TUNNEL_GAP + 26;
-      const top = g - h + 4;
-      const cy = g - h * 0.5 + 2;
+      const h = TUNNEL_GAP + 22;
+      const top = g - h + 6;
+      const cy = g - h * 0.5 + 4;
       const holeR = 20;
-      const holeY = h * 0.48;
+      const holeY = h * 0.46;
       if (!front) {
+        this.contactShadow(x + w * 0.5, g + 6, w * 0.42, 7);
         ctx.fillStyle = "#3a1518";
         ctx.beginPath();
         ctx.roundRect(x, top, w, h, h * 0.5);
@@ -1840,7 +1840,7 @@ export class PacklineGame {
     }
     ctx.fillStyle = "rgba(8,10,12,0.35)";
     ctx.beginPath();
-    ctx.ellipse(p.x, this.ground + 4, (p.sliding ? 34 : 24) * d.scale, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(p.x, p.y + 4, (p.sliding ? 34 : 24) * d.scale, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
     let frame: HTMLImageElement | null = null;
