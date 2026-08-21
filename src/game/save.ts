@@ -2,7 +2,7 @@ import { isDogId, type DogId } from "./characters";
 import { todayKey, type MissionProgress } from "./missions";
 
 const KEY = "packline-save";
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 export type SaveData = {
   version: number;
@@ -15,6 +15,7 @@ export type SaveData = {
   bestDistance: number;
   day: string;
   missions: MissionProgress[];
+  displayName: string;
 };
 
 const defaults: SaveData = {
@@ -28,6 +29,7 @@ const defaults: SaveData = {
   bestDistance: 0,
   day: "",
   missions: [],
+  displayName: "",
 };
 
 function migrate(raw: Partial<SaveData> & { version?: number }): SaveData {
@@ -41,6 +43,7 @@ function migrate(raw: Partial<SaveData> & { version?: number }): SaveData {
   merged.character = isDogId(merged.character) ? merged.character : "remy";
   merged.day = typeof merged.day === "string" ? merged.day : "";
   merged.missions = Array.isArray(merged.missions) ? merged.missions : [];
+  merged.displayName = typeof merged.displayName === "string" ? merged.displayName.slice(0, 16) : "";
   if (merged.day !== todayKey()) {
     merged.day = todayKey();
     merged.missions = [];

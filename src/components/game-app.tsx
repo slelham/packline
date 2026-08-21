@@ -5,8 +5,11 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { signOut } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { BootIntro } from "@/components/boot-intro";
+import { PackBoard } from "@/components/pack-board";
 import { DOG_IDS, DOGS, type DogId } from "@/game/characters";
 import { PacklineGame, type HudState, type Phase } from "@/game/engine";
+import { loadSave, writeSave } from "@/game/save";
+import { listScores, submitScore, type BoardRow } from "@/lib/scores";
 import { cn } from "@/lib/utils";
 
 const idleHud: HudState = {
@@ -115,12 +118,20 @@ export function GameApp() {
   const gameRef = useRef<PacklineGame | null>(null);
   const [hud, setHud] = useState<HudState>(idleHud);
   const [intro, setIntro] = useState(true);
+  const [board, setBoard] = useState<BoardRow[]>([]);
+  const [boardName, setBoardName] = useState(() => loadSave().displayName);
+  const [posted, setPosted] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState("");
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const game = new PacklineGame(canvas, setHud);
     gameRef.current = game;
+    void listScores()
+      .then(setBoard)
+      .catch(() => setBoard([]));
     return () => {
       game.destroy();
       gameRef.current = null;
@@ -138,11 +149,45 @@ export function GameApp() {
     if (!game) return;
     game.setCharacter(id);
     game.startFromTitle();
+    setPosted(false);
+    setPostError("");
   }
 
   function runAgain(e?: SyntheticEvent) {
     e?.stopPropagation();
     gameRef.current?.restart();
+    setPosted(false);
+    setPostError("");
+  }
+
+  async function postScore(e?: SyntheticEvent) {
+    e?.stopPropagation();
+    e?.preventDefault();
+    if (posted || posting || hud.score < 1) return;
+    const name = boardName.trim();
+    if (!name) {
+      setPostError("Put a name on the board.");
+      return;
+    }
+    setPosting(true);
+    setPostError("");
+    try {
+      const res = await submitScore({ data: { name, dog: hud.character, score: hud.score } });
+      if (!res.ok) {
+        setPostError(res.error);
+        return;
+      }
+      setBoard(res.board);
+      setPosted(true);
+      const save = loadSave();
+      save.displayName = res.name;
+      writeSave(save);
+      setBoardName(res.name);
+    } catch {
+      setPostError("Board is busy. Try again.");
+    } finally {
+      setPosting(false);
+    }
   }
 
   function tryRevive(e?: SyntheticEvent) {
@@ -190,7 +235,6 @@ export function GameApp() {
                 {playing ? (
                   <>
                     {dog.name}
-                    {hud.combo >= 1 ? <span className="ml-2 text-accent tabular-nums">x{hud.combo}</span> : null}
                     {hud.runTreats > 0 ? <span className="ml-2 tabular-nums">{hud.runTreats} treats</span> : null}
                   </>
                 ) : (
@@ -248,17 +292,21 @@ export function GameApp() {
               "pointer-events-none absolute inset-x-0 top-0 z-10 h-1 origin-left bg-accent",
               playing ? "opacity-80" : "opacity-0",
             )}
-            style={{ transform: `scaleX(${Math.min(1, hud.distance / 2400)})` }}
+            style={{ transform: `scaleX(${Math.min(1, hud.distance / 1400)})` }}
           />
 
           {!intro && (overlay === "title" || overlay === "boot") ? (
             <div
               data-ui
-              className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-4"
+              className="absolute inset-x-0 bottom-0 z-30 max-h-[82%] overflow-y-auto bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-4"
             >
               <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
               <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
-              <p className="mt-1 text-center text-sm text-muted">Chain clears. Star doubles the payout.</p>
+              <p className="mt-1 text-center text-sm text-muted">Treats are the score. Course gets meaner as you go.</p>
+              <div className="mx-auto mt-3 w-full max-w-md">
+                <p className="mb-1 text-[10px] tracking-[0.28em] text-muted uppercase">Park board</p>
+                <PackBoard rows={board} compact />
+              </div>
               {hud.missions.length > 0 ? (
                 <ul className="mx-auto mt-3 grid max-w-md grid-cols-3 gap-1.5">
                   {hud.missions.map((m) => (
@@ -316,36 +364,50 @@ export function GameApp() {
               >
                 Run {dog.name}
               </Button>
-              <p className="mt-2 text-center text-xs text-subtle">Miss the chain window and the multiplier drops.</p>
+              <p className="mt-2 text-center text-xs text-subtle">One treat. One point. Star treats count double.</p>
             </div>
           ) : null}
 
           {overlay === "gameover" ? (
             <div
               data-ui
-              className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/96 to-transparent px-4 pt-16 pb-4"
+              className="absolute inset-x-0 bottom-0 z-30 max-h-[78%] overflow-y-auto bg-gradient-to-t from-bg via-bg/96 to-transparent px-4 pt-16 pb-4"
             >
               <p className="text-[10px] tracking-[0.28em] text-muted uppercase">{dog.name} wiped out</p>
               <p className="font-display mt-1 text-5xl leading-none font-extrabold tabular-nums">{formatScore(hud.score)}</p>
+              <p className="mt-1 text-sm text-muted">{hud.score === 1 ? "1 treat" : `${hud.score} treats`}</p>
               {hud.newBest ? <p className="mt-1 text-sm text-accent">New best</p> : null}
-              <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
-                <div className="rounded-md bg-elevated/90 px-2 py-2">
-                  <dt className="text-[10px] text-muted">Peak</dt>
-                  <dd className="font-mono tabular-nums">x{hud.lastRunCombo}</dd>
-                </div>
-                <div className="rounded-md bg-elevated/90 px-2 py-2">
-                  <dt className="text-[10px] text-muted">Treats</dt>
-                  <dd className="font-mono text-xs tabular-nums">+{hud.runTreats}</dd>
-                </div>
-                <div className="rounded-md bg-elevated/90 px-2 py-2">
-                  <dt className="text-[10px] text-muted">Hoops</dt>
-                  <dd className="font-mono tabular-nums">{hud.lastRunThreads}</dd>
-                </div>
-                <div className="rounded-md bg-elevated/90 px-2 py-2">
-                  <dt className="text-[10px] text-muted">Tunnels</dt>
-                  <dd className="font-mono tabular-nums">{hud.lastRunTunnels}</dd>
-                </div>
-              </dl>
+              <form
+                className="mx-auto mt-3 flex w-full max-w-md gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void postScore(e);
+                }}
+              >
+                <input
+                  data-ui
+                  name="board-name"
+                  maxLength={16}
+                  placeholder="Display name"
+                  value={boardName}
+                  onChange={(e) => setBoardName(e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="h-12 min-w-0 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-fg placeholder:text-subtle"
+                />
+                <Button
+                  type="submit"
+                  data-ui
+                  variant="secondary"
+                  className="h-12 shrink-0 px-4"
+                  disabled={posted || posting || hud.score < 1}
+                >
+                  {posted ? "Posted" : posting ? "Posting" : "Post"}
+                </Button>
+              </form>
+              {postError ? <p className="mt-1 text-center text-xs text-danger">{postError}</p> : null}
+              <div className="mx-auto mt-3 w-full max-w-md">
+                <PackBoard rows={board} compact />
+              </div>
               {hud.canRevive ? (
                 <Button type="button" data-ui size="lg" className="mt-3 h-14 w-full text-base" onPointerDown={tryRevive} onClick={tryRevive}>
                   <Heart className="size-4" />
