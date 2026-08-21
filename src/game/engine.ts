@@ -31,6 +31,7 @@ export type HudState = {
   shield: number;
   magnet: number;
   frenzy: number;
+  boost: number;
   canRevive: boolean;
   reviveCost: number;
   biome: Biome;
@@ -625,9 +626,9 @@ export class PacklineGame {
     const p = this.progress();
     this.speed = lerp(BASE_SPEED, MAX_SPEED, 1 - (1 - p) * (1 - p)) * this.dog().speed;
     if (this.frenzyT > 0) this.speed *= 1.12;
-    if (this.boostT > 0) this.speed *= 1.48;
+    if (this.boostT > 0) this.speed *= 1.42;
     this.distance += this.speed * dt * 0.12;
-    const mult = (1 + this.combo * 0.06) * (this.frenzyT > 0 ? 2.2 : 1) * (this.boostT > 0 ? 1.25 : 1);
+    const mult = (1 + this.combo * 0.06) * (this.frenzyT > 0 ? 2.2 : 1) * (this.boostT > 0 ? 1.35 : 1);
     this.score += this.speed * dt * 0.1 * mult;
     this.shieldT = Math.max(0, this.shieldT - dt);
     this.magnetT = Math.max(0, this.magnetT - dt);
@@ -647,6 +648,18 @@ export class PacklineGame {
     this.stepFx(dt);
     this.decayJuice(dt);
     this.bumpMissions();
+
+    if (this.boostT > 0 && !this.reduced) {
+      this.emitParticle(
+        this.player.x - 8 + Math.random() * 20,
+        this.player.y - 20 - Math.random() * 50,
+        -80 - Math.random() * 60,
+        -20 + Math.random() * 40,
+        0.28,
+        3 + Math.random() * 3,
+        ["#f4e27a", "#5ec8c4", "#ece8dc", "#d4654a"][Math.floor(Math.random() * 4)]!,
+      );
+    }
 
     if (this.player.grounded && !this.player.sliding) {
       this.dustTimer -= dt;
@@ -1013,6 +1026,10 @@ export class PacklineGame {
       }
       this.sitObstacle(o);
       if (this.collides(box, o)) {
+        if (this.boostT > 0) {
+          this.smash(o);
+          continue;
+        }
         if (this.invulnT > 0) continue;
         if (this.shieldT > 0) {
           this.shieldT = 0;
@@ -1036,12 +1053,12 @@ export class PacklineGame {
             this.inTunnel = true;
             if (!o.special) {
               o.special = true;
-              this.boostT = Math.max(this.boostT, 0.95);
+              this.boostT = Math.max(this.boostT, 2.35);
               this.combo += 1;
               this.score += 90;
-              this.flash = Math.max(this.flash, 0.16);
+              this.flash = Math.max(this.flash, 0.22);
               this.audio.boost();
-              this.spawnFloater(box.x + 16, box.y - 18, `BOOST x${this.combo}`);
+              this.spawnFloater(box.x + 16, box.y - 18, "STAR");
               this.hudDirty = true;
             }
           }
@@ -1097,13 +1114,15 @@ export class PacklineGame {
         c.active = false;
         continue;
       }
-      if (this.magnetT > 0) {
+      if (this.magnetT > 0 || this.boostT > 0) {
         const mx = px - c.x;
         const my = py - c.y;
         const mag = Math.hypot(mx, my) || 1;
-        if (mag < 240) {
-          c.x += (mx / mag) * 420 * (1 / 60);
-          c.y += (my / mag) * 420 * (1 / 60);
+        const range = this.boostT > 0 ? 340 : 240;
+        const pull = this.boostT > 0 ? 680 : 420;
+        if (mag < range) {
+          c.x += (mx / mag) * pull * (1 / 60);
+          c.y += (my / mag) * pull * (1 / 60);
         }
       }
       const cx = clamp(c.x, box.x, box.x + box.w);
@@ -1113,7 +1132,7 @@ export class PacklineGame {
       if (dx * dx + dy * dy < c.r * c.r) {
         c.active = false;
         this.runTreats += 1;
-        const gain = Math.round(40 * (1 + this.combo * 0.08) * (this.frenzyT > 0 ? 2 : 1));
+        const gain = Math.round(40 * (1 + this.combo * 0.08) * (this.frenzyT > 0 || this.boostT > 0 ? 2 : 1));
         this.score += gain;
         this.audio.coin();
         this.spawnFloater(c.x, c.y, `+${gain}`);
@@ -1151,6 +1170,30 @@ export class PacklineGame {
       this.frenzyT = 6;
       this.spawnFloater(this.player.x, this.player.y - 80, "FRENZY");
     }
+  }
+
+  private smash(o: Obstacle) {
+    o.active = false;
+    this.combo += 1;
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
+    this.score += 55 + this.combo * 4;
+    this.trauma = Math.max(this.trauma, 0.22);
+    this.flash = Math.max(this.flash, 0.1);
+    this.audio.combo(this.combo);
+    this.spawnBurst(o.x + o.w * 0.4, o.y + o.h * 0.3, "impact");
+    this.spawnFloater(o.x, o.y - 12, `SMASH x${this.combo}`);
+    for (let i = 0; i < 6; i++) {
+      this.emitParticle(
+        o.x + o.w * 0.4,
+        o.y + o.h * 0.3,
+        -140 + Math.random() * 220,
+        -180 + Math.random() * 120,
+        0.32,
+        4,
+        i % 2 ? "#f4e27a" : "#ece8dc",
+      );
+    }
+    this.hudDirty = true;
   }
 
   private die(o: Obstacle) {
@@ -1259,7 +1302,7 @@ export class PacklineGame {
   }
 
   private emitHud() {
-    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${this.biome}|${this.usedRevive}`;
+    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${Math.ceil(this.boostT)}|${this.biome}|${this.usedRevive}`;
     if (snap === this.hudKey) return;
     this.hudKey = snap;
     this.onHud({
@@ -1284,6 +1327,7 @@ export class PacklineGame {
       shield: this.shieldT,
       magnet: this.magnetT,
       frenzy: this.frenzyT,
+      boost: this.boostT,
       canRevive: this.phase === "gameover" && !this.usedRevive && this.save.treats >= this.reviveCost,
       reviveCost: this.reviveCost,
       biome: this.biome,
@@ -1738,13 +1782,32 @@ export class PacklineGame {
 
     const h = (p.sliding ? 96 : 128) * p.squash * d.scale;
     const w = h * (p.sliding ? 1.22 : 1.08) * p.stretch;
+    const star = this.boostT > 0;
+    if (frame && star) {
+      const trail = Math.min(3, Math.ceil(this.boostT * 1.4));
+      for (let i = trail; i >= 1; i--) {
+        ctx.save();
+        ctx.globalAlpha = 0.18 / i;
+        ctx.filter = `hue-rotate(${(p.anim * 480 + i * 50) % 360}deg) saturate(1.8)`;
+        ctx.drawImage(frame, p.x - w * 0.5 - i * 16, p.y - h + 6, w, h);
+        ctx.restore();
+      }
+      ctx.filter = `hue-rotate(${(p.anim * 720) % 360}deg) saturate(1.65) brightness(1.18)`;
+    }
     if (frame) {
       ctx.drawImage(frame, p.x - w * 0.5, p.y - h + 6, w, h);
     } else {
       ctx.fillStyle = "#ece8dc";
       ctx.fillRect(p.x - w * 0.25, p.y - h, w * 0.5, h);
     }
-    if (this.shieldT > 0 || this.invulnT > 0) {
+    ctx.filter = "none";
+    if (star) {
+      ctx.strokeStyle = `hsla(${(p.anim * 280) % 360}, 80%, 70%, 0.7)`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - h * 0.45, w * 0.62, h * 0.58, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (this.shieldT > 0 || this.invulnT > 0) {
       ctx.strokeStyle = `rgba(94, 200, 196, ${0.45 + Math.sin(p.anim * 10) * 0.2})`;
       ctx.lineWidth = 3;
       ctx.beginPath();

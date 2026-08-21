@@ -31,6 +31,7 @@ const idleHud: HudState = {
   shield: 0,
   magnet: 0,
   frenzy: 0,
+  boost: 0,
   canRevive: false,
   reviveCost: 40,
   biome: "park",
@@ -231,6 +232,11 @@ export function GameApp() {
               {hud.frenzy > 0 ? (
                 <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[10px] tracking-wide text-danger uppercase">
                   Frenzy {Math.ceil(hud.frenzy)}
+                </span>
+              ) : null}
+              {hud.boost > 0 ? (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] tracking-wide text-accent-fg uppercase">
+                  Star {Math.ceil(hud.boost)}
                 </span>
               ) : null}
             </div>
