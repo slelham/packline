@@ -456,10 +456,14 @@ export class PacklineGame {
 
   private rebaseGround(prev: number) {
     const dy = this.ground - prev;
-    if (this.player.grounded && this.phase !== "dying") this.player.y = this.ground;
-    else this.player.y += dy;
+    if (Math.abs(dy) < 0.5) {
+      this.cat.y = this.ground;
+      return;
+    }
+    const above = prev - this.player.y;
+    if (this.phase === "dying") this.player.y += dy;
+    else this.player.y = this.ground - above;
     this.cat.y = this.ground;
-    if (Math.abs(dy) < 0.5) return;
     for (const o of this.obstacles) {
       if (!o.active) continue;
       this.sitObstacle(o);
@@ -801,7 +805,7 @@ export class PacklineGame {
     } else if (kind === "pipe") {
       w = clamp(this.viewW * 0.22, 90, 150);
       h = 24;
-      gap = TUNNEL_GAP + 6;
+      gap = 56;
     } else if (kind === "plat") {
       w = lerp(150, 210, Math.random());
       h = 18;
@@ -914,7 +918,7 @@ export class PacklineGame {
     if (p.sliding) {
       const h = 32 * d.hitH;
       const w = 70 * d.hitW;
-      return { x: p.x - w * 0.38, y: this.ground - h, w, h };
+      return { x: p.x - w * 0.38, y: p.y - h, w, h };
     }
     const air = !p.grounded;
     const h = (air ? 50 : 68) * d.hitH;
@@ -941,39 +945,6 @@ export class PacklineGame {
     if (p.grounded) p.coyote = COYOTE;
     else p.coyote = Math.max(0, p.coyote - dt);
 
-    p.vy = Math.min(MAX_FALL, p.vy + GRAVITY * dt);
-    const prevY = p.y;
-    p.y += p.vy * dt;
-
-    let floor = this.ground;
-    if (p.vy >= -60) {
-      for (const o of this.obstacles) {
-        if (!o.active || o.kind !== "plat") continue;
-        this.sitObstacle(o);
-        const top = o.y;
-        const over = p.x > o.x + 10 && p.x < o.x + o.w - 8;
-        if (over && prevY <= top + 20 && p.y >= top - 3) floor = Math.min(floor, top);
-      }
-    }
-
-    if (p.y >= floor) {
-      if (!p.grounded) this.land();
-      p.y = floor;
-      p.vy = 0;
-      p.grounded = true;
-    } else {
-      p.grounded = false;
-    }
-
-    const onFloor = p.grounded && p.y >= this.ground - 6;
-    const tapSlide = this.input.consumeSlide();
-    if (onFloor && (tapSlide || (this.input.slideHeld && !p.sliding))) {
-      if (!p.sliding) this.audio.slide();
-      p.sliding = true;
-      p.slideT = SLIDE_TIME * this.dog().slide;
-      this.emitParticle(p.x, this.ground - 6, -80, -10, 0.3, 5, "#c4a66a");
-    }
-
     if (this.input.consumeJump()) this.jumpBuf = JUMP_BUF;
     this.jumpBuf = Math.max(0, this.jumpBuf - dt);
     if (this.jumpBuf > 0 && (p.grounded || p.coyote > 0)) {
@@ -997,8 +968,44 @@ export class PacklineGame {
       this.emitParticle(p.x, p.y, -40, 40, 0.22, 4, "#ece8dc");
     }
 
-    if (!p.grounded && !this.input.jumpHeld && p.vy < -420) {
-      p.vy *= 0.78;
+    if (!p.grounded) {
+      let g = GRAVITY;
+      if (!this.input.jumpHeld && p.vy < 0) g *= 2.45;
+      p.vy = Math.min(MAX_FALL, p.vy + g * dt);
+    } else if (p.vy > 0) {
+      p.vy = 0;
+    }
+
+    const prevY = p.y;
+    p.y += p.vy * dt;
+
+    let floor = this.ground;
+    if (p.vy >= 0) {
+      for (const o of this.obstacles) {
+        if (!o.active || o.kind !== "plat") continue;
+        this.sitObstacle(o);
+        const top = o.y;
+        const over = p.x > o.x + 8 && p.x < o.x + o.w - 6;
+        if (over && prevY <= top + 1 && p.y >= top) floor = Math.min(floor, top);
+      }
+    }
+
+    if (p.y >= floor) {
+      if (!p.grounded) this.land();
+      p.y = floor;
+      p.vy = 0;
+      p.grounded = true;
+    } else {
+      p.grounded = false;
+    }
+
+    const onFloor = p.grounded && p.y >= this.ground - 6;
+    const tapSlide = this.input.consumeSlide();
+    if (onFloor && (tapSlide || (this.input.slideHeld && !p.sliding))) {
+      if (!p.sliding) this.audio.slide();
+      p.sliding = true;
+      p.slideT = SLIDE_TIME * this.dog().slide;
+      this.emitParticle(p.x, this.ground - 6, -80, -10, 0.3, 5, "#c4a66a");
     }
 
     const targetSquash = p.grounded ? (p.landKick > 0 ? 0.82 : 1) : p.vy < 0 ? 1.16 : 1.04;
@@ -1066,8 +1073,8 @@ export class PacklineGame {
     const x = o.x + padX;
     const w = Math.max(16, o.w - padX * 2);
     if (o.kind === "plat") {
-      if (box.y + box.h <= o.y + 12) return false;
-      return aabb(box.x, box.y, box.w, box.h, o.x + 2, o.y, 14, o.h);
+      if (box.y + box.h <= o.y + 10) return false;
+      return aabb(box.x, box.y, box.w, box.h, o.x + 2, o.y, 12, o.h);
     }
     if (o.kind === "hoop" && o.holeH > 0) {
       const topH = Math.max(0, o.holeY - o.y - 8);
@@ -1078,11 +1085,11 @@ export class PacklineGame {
       return hitTop || hitBot;
     }
     if (o.kind === "tunnel" || o.kind === "pipe") {
-      if (this.player.sliding) return false;
-      const roof = this.ground - o.gap - 18;
-      if (box.y + box.h < roof + 12) return false;
-      const padX = 8;
-      return aabb(box.x, box.y, box.w, box.h, o.x + padX, roof, Math.max(20, o.w - padX * 2), this.ground - roof - 4);
+      const standH = 68 * this.dog().hitH;
+      if (this.player.sliding || standH < o.gap - 20) return false;
+      const roof = this.ground - o.gap - 12;
+      if (box.y + box.h < roof + 8) return false;
+      return aabb(box.x, box.y, box.w, box.h, o.x + 8, roof, Math.max(20, o.w - 16), this.ground - roof - 4);
     }
     const top = o.kind === "hurdle" || o.kind === "crate" || o.kind === "hydrant" ? 10 : 6;
     return aabb(box.x, box.y, box.w, box.h, x, o.y + top, w, Math.max(12, o.h - top - 4));

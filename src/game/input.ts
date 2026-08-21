@@ -21,6 +21,8 @@ export class Input {
   private onPointerDown: (e: PointerEvent) => void;
   private onPointerMove: (e: PointerEvent) => void;
   private onPointerUp: (e: PointerEvent) => void;
+  private padJump = false;
+  private padSlide = false;
   private target: HTMLElement;
 
   constructor(target: HTMLElement) {
@@ -141,21 +143,32 @@ export class Input {
 
   private pollGamepad() {
     const pads = navigator.getGamepads?.() ?? [];
+    let padJump = false;
+    let padSlide = false;
     for (const pad of pads) {
       if (!pad) continue;
       const a = pad.buttons[0]?.pressed;
       const b = pad.buttons[1]?.pressed;
       const down = pad.buttons[13]?.pressed || (pad.axes[1] ?? 0) > 0.55;
       const up = pad.buttons[12]?.pressed || (pad.axes[1] ?? 0) < -0.55;
-      if (a || up) {
-        if (!this.jumpHeld) this.jumpBuffer = 0.14;
-        this.jumpHeld = true;
-      }
-      if (b || down) {
-        this.slideBuffer = 0.14;
-        this.slideHeld = true;
-      }
+      if (a || up) padJump = true;
+      if (b || down) padSlide = true;
     }
+    if (padJump && !this.padJump) this.jumpBuffer = 0.14;
+    if (padJump) this.jumpHeld = true;
+    else if (this.padJump && !this.jumpKeyDown() && this.pointers.size === 0) this.jumpHeld = false;
+    if (padSlide) {
+      this.slideBuffer = 0.14;
+      this.slideHeld = true;
+    } else if (this.padSlide && !this.keys.has("ArrowDown") && !this.keys.has("KeyS") && this.pointers.size === 0) {
+      this.slideHeld = false;
+    }
+    this.padJump = padJump;
+    this.padSlide = padSlide;
+  }
+
+  private jumpKeyDown() {
+    return this.keys.has("Space") || this.keys.has("ArrowUp") || this.keys.has("KeyW");
   }
 
   destroy() {
