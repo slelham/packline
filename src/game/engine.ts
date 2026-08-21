@@ -57,6 +57,18 @@ const HOOP_H = 318;
 const HOOP_W = 128;
 const HOOP_HOLE_TOP = 286;
 const HOOP_HOLE_H = 262;
+const COMBO_WINDOW = 1.7;
+const COMBO_CAP = 12;
+const PTS = {
+  dist: 10,
+  clear: 100,
+  hoop: 200,
+  thread: 400,
+  vault: 250,
+  star: 500,
+  smash: 200,
+  treat: 20,
+} as const;
 
 type Kind = "hurdle" | "hoop" | "tunnel" | "weave" | "crate" | "hydrant" | "pipe";
 
@@ -138,6 +150,7 @@ export class PacklineGame {
   private phase: Phase = "boot";
   private score = 0;
   private combo = 0;
+  private comboT = 0;
   private maxCombo = 0;
   private lastRunCombo = 0;
   private lastRunThreads = 0;
@@ -148,6 +161,7 @@ export class PacklineGame {
   private skyGrad: CanvasGradient | null = null;
   private skyH = 0;
   private distance = 0;
+  private distBank = 0;
   private speed = BASE_SPEED;
   private newBest = false;
   private charId: DogId = "remy";
@@ -567,11 +581,13 @@ export class PacklineGame {
   private resetRun() {
     this.score = 0;
     this.combo = 0;
+    this.comboT = 0;
     this.maxCombo = 0;
     this.threads = 0;
     this.tunnels = 0;
     this.inTunnel = false;
     this.distance = 0;
+    this.distBank = 0;
     this.speed = BASE_SPEED;
     this.newBest = false;
     this.player.y = this.ground;
@@ -628,13 +644,24 @@ export class PacklineGame {
     if (this.frenzyT > 0) this.speed *= 1.12;
     if (this.boostT > 0) this.speed *= 1.42;
     this.distance += this.speed * dt * 0.12;
-    const mult = (1 + this.combo * 0.06) * (this.frenzyT > 0 ? 2.2 : 1) * (this.boostT > 0 ? 1.35 : 1);
-    this.score += this.speed * dt * 0.1 * mult;
+    this.distBank += this.speed * dt * 0.12;
+    while (this.distBank >= 12) {
+      this.distBank -= 12;
+      this.score += PTS.dist;
+    }
     this.shieldT = Math.max(0, this.shieldT - dt);
     this.magnetT = Math.max(0, this.magnetT - dt);
     this.frenzyT = Math.max(0, this.frenzyT - dt);
     this.invulnT = Math.max(0, this.invulnT - dt);
     this.boostT = Math.max(0, this.boostT - dt);
+    if (this.comboT > 0) {
+      this.comboT = Math.max(0, this.comboT - dt);
+      if (this.comboT === 0 && this.combo > 0) {
+        if (this.combo >= 3) this.spawnFloater(this.player.x, this.player.y - 90, "COMBO DROP");
+        this.combo = 0;
+        this.hudDirty = true;
+      }
+    }
     this.audio.tick(dt, true);
     this.updateBiome();
 
@@ -1054,12 +1081,9 @@ export class PacklineGame {
             if (!o.special) {
               o.special = true;
               this.boostT = Math.max(this.boostT, 2.35);
-              this.combo += 1;
-              this.score += 90;
               this.flash = Math.max(this.flash, 0.22);
               this.audio.boost();
-              this.spawnFloater(box.x + 16, box.y - 18, "STAR");
-              this.hudDirty = true;
+              this.award(PTS.star, "STAR", 2, box.x + 16, box.y - 18);
             }
           }
           o.near = Math.min(o.near, this.player.sliding ? 0 : Math.abs(box.y + box.h - (this.ground - o.gap)));
@@ -1074,32 +1098,38 @@ export class PacklineGame {
 
       if (!o.scored && o.x + o.w < box.x) {
         o.scored = true;
-        if (o.kind === "tunnel" && o.special) {
-          this.tunnels += 1;
+        if ((o.kind === "tunnel" || o.kind === "pipe") && o.special) {
+          if (o.kind === "tunnel") this.tunnels += 1;
           this.hudDirty = true;
           continue;
         }
-        this.combo += 1;
-        if (o.near < 20) this.combo += 1;
-        let label = o.near < 20 ? `CLOSE x${this.combo}` : `x${this.combo}`;
+        let base: number = PTS.clear;
+        let label = "CLEAR";
+        let hits = 1;
         if (o.kind === "hoop") {
           this.threads += 1;
-          this.combo += 1;
-          this.score += 80;
-          label = o.special ? `THREADED x${this.combo}` : `HOOP x${this.combo}`;
           this.flash = Math.max(this.flash, 0.12);
-        } else if (o.kind === "tunnel") {
-          this.tunnels += 1;
-          this.combo += 1;
-          this.score += 70;
-          label = `VAULT x${this.combo}`;
+          if (o.special) {
+            base = PTS.thread;
+            label = "THREAD";
+            hits = 2;
+          } else {
+            base = PTS.hoop;
+            label = "HOOP";
+          }
+        } else if (o.kind === "tunnel" || o.kind === "pipe") {
+          if (o.kind === "tunnel") this.tunnels += 1;
+          base = PTS.vault;
+          label = "VAULT";
+          hits = 2;
+        } else if (o.kind === "crate" || o.kind === "hydrant") {
+          base = 150;
         }
-        this.maxCombo = Math.max(this.maxCombo, this.combo);
-        const gain = Math.round(28 * this.combo * (o.near < 20 ? 1.4 : 1));
-        this.score += gain;
-        this.audio.combo(this.combo);
-        this.spawnFloater(box.x + 20, box.y - 10, label);
-        this.hudDirty = true;
+        if (o.near < 20) {
+          hits += 1;
+          if (label === "CLEAR") label = "CLOSE";
+        }
+        this.award(base, label, hits, box.x + 20, box.y - 10);
       }
     }
   }
@@ -1132,10 +1162,11 @@ export class PacklineGame {
       if (dx * dx + dy * dy < c.r * c.r) {
         c.active = false;
         this.runTreats += 1;
-        const gain = Math.round(40 * (1 + this.combo * 0.08) * (this.frenzyT > 0 || this.boostT > 0 ? 2 : 1));
+        const m = Math.max(1, this.combo);
+        const gain = PTS.treat * m * (this.frenzyT > 0 || this.boostT > 0 ? 2 : 1);
         this.score += gain;
         this.audio.coin();
-        this.spawnFloater(c.x, c.y, `+${gain}`);
+        this.spawnFloater(c.x, c.y, `TREAT +${gain}`);
         this.emitParticle(c.x, c.y, 0, -40, 0.4, 5, "#5ec8c4");
         this.hudDirty = true;
       }
@@ -1174,14 +1205,10 @@ export class PacklineGame {
 
   private smash(o: Obstacle) {
     o.active = false;
-    this.combo += 1;
-    this.maxCombo = Math.max(this.maxCombo, this.combo);
-    this.score += 55 + this.combo * 4;
+    this.award(PTS.smash, "SMASH", 1, o.x, o.y - 12);
     this.trauma = Math.max(this.trauma, 0.22);
     this.flash = Math.max(this.flash, 0.1);
-    this.audio.combo(this.combo);
     this.spawnBurst(o.x + o.w * 0.4, o.y + o.h * 0.3, "impact");
-    this.spawnFloater(o.x, o.y - 12, `SMASH x${this.combo}`);
     for (let i = 0; i < 6; i++) {
       this.emitParticle(
         o.x + o.w * 0.4,
@@ -1193,7 +1220,6 @@ export class PacklineGame {
         i % 2 ? "#f4e27a" : "#ece8dc",
       );
     }
-    this.hudDirty = true;
   }
 
   private die(o: Obstacle) {
@@ -1252,6 +1278,19 @@ export class PacklineGame {
     p.max = life;
     p.size = size;
     p.color = color;
+  }
+
+  private award(base: number, label: string, hits = 1, x?: number, y?: number) {
+    this.combo = clamp(this.combo + hits, 1, COMBO_CAP);
+    this.comboT = COMBO_WINDOW;
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
+    let gain = base * this.combo;
+    if (this.boostT > 0 || this.frenzyT > 0) gain *= 2;
+    this.score += gain;
+    this.audio.combo(this.combo);
+    this.spawnFloater(x ?? this.player.x + 24, y ?? this.player.y - 36, `${label} +${gain}`);
+    this.hudDirty = true;
+    return gain;
   }
 
   private spawnBurst(x: number, y: number, kind: "dust" | "impact") {

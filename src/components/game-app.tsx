@@ -189,7 +189,7 @@ export function GameApp() {
                 {playing ? (
                   <>
                     {dog.name}
-                    {hud.combo >= 2 ? <span className="ml-2 text-accent tabular-nums">x{hud.combo}</span> : null}
+                    {hud.combo >= 1 ? <span className="ml-2 text-accent tabular-nums">x{hud.combo}</span> : null}
                     {hud.runTreats > 0 ? <span className="ml-2 tabular-nums">{hud.runTreats} treats</span> : null}
                   </>
                 ) : (
@@ -257,7 +257,7 @@ export function GameApp() {
             >
               <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
               <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
-              <p className="mt-1 text-center text-sm text-muted">Tap a dog. Chain hoops. Bank treats.</p>
+              <p className="mt-1 text-center text-sm text-muted">Chain clears. Star doubles the payout.</p>
               {hud.missions.length > 0 ? (
                 <ul className="mx-auto mt-3 grid max-w-md grid-cols-3 gap-1.5">
                   {hud.missions.map((m) => (
@@ -315,7 +315,7 @@ export function GameApp() {
               >
                 Run {dog.name}
               </Button>
-              <p className="mt-2 text-center text-xs text-subtle">Jump · Slide · Shield · Magnet · Frenzy</p>
+              <p className="mt-2 text-center text-xs text-subtle">Miss the chain window and the multiplier drops.</p>
             </div>
           ) : null}
 
@@ -329,7 +329,7 @@ export function GameApp() {
               {hud.newBest ? <p className="mt-1 text-sm text-accent">New best</p> : null}
               <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
                 <div className="rounded-md bg-elevated/90 px-2 py-2">
-                  <dt className="text-[10px] text-muted">Combo</dt>
+                  <dt className="text-[10px] text-muted">Peak</dt>
                   <dd className="font-mono tabular-nums">x{hud.lastRunCombo}</dd>
                 </div>
                 <div className="rounded-md bg-elevated/90 px-2 py-2">
