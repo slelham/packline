@@ -164,6 +164,7 @@ export class PacklineGame {
     anim: 0,
     landKick: 0,
     jumpStretch: 0,
+    airJumps: 1,
   };
   private cat = {
     y: 0,
@@ -368,7 +369,7 @@ export class PacklineGame {
   }
 
   private pool() {
-    this.obstacles = Array.from({ length: 28 }, () => ({
+    this.obstacles = Array.from({ length: 32 }, () => ({
       active: false,
       kind: "hurdle" as Kind,
       x: 0,
@@ -588,6 +589,7 @@ export class PacklineGame {
     this.player.anim = 0;
     this.player.landKick = 0;
     this.player.jumpStretch = 0;
+    this.player.airJumps = 1;
     this.cat.y = this.ground;
     this.cat.sway = 0;
     this.cat.side = 1;
@@ -842,23 +844,30 @@ export class PacklineGame {
 
   private spawnPlatforms(x: number) {
     const p = this.progress();
-    const n = p > 0.5 && Math.random() < 0.45 ? 3 : 2;
-    const rise = clamp(this.jumpPeak() * 0.4, 70, 110);
+    const peak = this.jumpPeak();
+    const n = p > 0.48 ? 4 : 3;
+    const rises: number[] = [];
+    let rise = clamp(peak * 0.3, 54, 72);
+    for (let i = 0; i < n; i++) {
+      rises.push(rise);
+      rise += clamp(peak * lerp(0.2, 0.28, p), 40, 62);
+    }
     let cx = x;
     let last: Obstacle | null = null;
     for (let i = 0; i < n; i++) {
       const o = this.placeObstacle("plat", cx);
       if (!o) break;
-      o.gap = rise + (i === 1 ? 16 : 0);
+      const t = i / Math.max(1, n - 1);
+      o.w = lerp(148, 68, t);
+      o.gap = rises[i]!;
       this.sitObstacle(o);
-      const treats = 1 + (Math.random() < 0.5 ? 1 : 0);
-      for (let t = 0; t < treats; t++) {
-        this.placeCoin(o.x + o.w * (0.28 + t * 0.28), o.y - 22);
+      if (i < n - 1) {
+        this.placeCoin(o.x + o.w * 0.5, o.y - 22);
       }
       last = o;
-      cx += o.w + lerp(52, 88, p);
+      cx += o.w + lerp(48, 108, t * (0.55 + p * 0.5));
     }
-    if (last) this.placeCoin(last.x + last.w - 26, last.y - 38, 22, 2);
+    if (last) this.placeCoin(last.x + last.w * 0.72, last.y - 40, 22, 2);
     return last;
   }
 
@@ -972,15 +981,25 @@ export class PacklineGame {
 
     if (this.input.consumeJump()) this.jumpBuf = JUMP_BUF;
     this.jumpBuf = Math.max(0, this.jumpBuf - dt);
-    if ((p.grounded || p.coyote > 0) && this.jumpBuf > 0) {
+    if (this.jumpBuf > 0 && (p.grounded || p.coyote > 0)) {
       p.vy = JUMP_VEL * this.dog().jump;
       p.grounded = false;
       p.coyote = 0;
+      p.airJumps = 1;
       this.jumpBuf = 0;
       p.sliding = false;
       p.jumpStretch = 0.16;
       p.squash = 0.78;
       this.audio.jump();
+    } else if (this.jumpBuf > 0 && !p.grounded && p.airJumps > 0) {
+      p.vy = JUMP_VEL * this.dog().jump * 0.9;
+      p.airJumps = 0;
+      this.jumpBuf = 0;
+      p.sliding = false;
+      p.jumpStretch = 0.14;
+      p.squash = 0.82;
+      this.audio.jump();
+      this.emitParticle(p.x, p.y, -40, 40, 0.22, 4, "#ece8dc");
     }
 
     if (!p.grounded && !this.input.jumpHeld && p.vy < -420) {
@@ -1038,6 +1057,7 @@ export class PacklineGame {
 
   private land() {
     const p = this.player;
+    p.airJumps = 1;
     p.landKick = 0.12;
     p.squash = 0.76;
     p.stretch = 1.22;
@@ -1613,34 +1633,43 @@ export class PacklineGame {
           dy = g - dh + 10;
         } else if (o.kind === "weave") {
           img = spr.weave;
-          dw = o.w + 36;
-          dh = o.h + 28;
-          dx = o.x - 18;
+          dw = 42;
+          dh = o.h + 44;
+          dx = o.x + o.w * 0.5 - 21;
           dy = g - dh + 6;
         } else if (o.kind === "crate") {
           img = spr.crate;
-          dw = o.w + 16;
-          dh = o.h + 18;
-          dx = o.x - 8;
+          dw = o.w + 18;
+          dh = o.h + 20;
+          dx = o.x - 9;
           dy = g - dh + 6;
         } else if (o.kind === "hydrant") {
           img = spr.hydrant;
-          dw = o.w + 22;
-          dh = o.h + 16;
-          dx = o.x - 11;
+          dw = o.w + 18;
+          dh = o.h + 22;
+          dx = o.x - 9;
           dy = g - dh + 4;
         } else if (o.kind === "pipe") {
-          img = spr.pipe;
-          dw = o.w + 24;
-          dh = 32;
-          dx = o.x - 12;
-          dy = o.y - 6;
+          img = spr.tunnel;
+          dw = o.w + 40;
+          dh = 72;
+          dx = o.x - 20;
+          dy = g - dh + 8;
         } else if (o.kind === "plat") {
           img = spr.platform;
-          dw = o.w + 28;
-          dh = Math.max(36, g - o.y + 10);
-          dx = o.x - 14;
-          dy = o.y - 6;
+          dw = o.w + 18;
+          dh = 42;
+          dx = o.x - 9;
+          dy = o.y - 10;
+          this.ctx.fillStyle = "rgba(90, 62, 28, 0.55)";
+          this.ctx.fillRect(o.x + 10, o.y + 22, 5, Math.max(4, g - o.y - 22));
+          this.ctx.fillRect(o.x + o.w - 16, o.y + 22, 5, Math.max(4, g - o.y - 22));
+        } else {
+          img = spr.hurdle;
+          dw = o.w + 36;
+          dh = o.h + 30;
+          dx = o.x - 18;
+          dy = g - dh + 8;
         }
         this.ctx.drawImage(img, dx, dy, dw, dh);
       } else {
