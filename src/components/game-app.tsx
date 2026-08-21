@@ -4,6 +4,7 @@ import { ChevronsDown, ChevronsUp, Heart, RotateCcw, Share2, Volume2, VolumeX } 
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { signOut } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
+import { BootIntro } from "@/components/boot-intro";
 import { DOG_IDS, DOGS, type DogId } from "@/game/characters";
 import { PacklineGame, type HudState, type Phase } from "@/game/engine";
 import { cn } from "@/lib/utils";
@@ -112,6 +113,7 @@ export function GameApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<PacklineGame | null>(null);
   const [hud, setHud] = useState<HudState>(idleHud);
+  const [intro, setIntro] = useState(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -166,7 +168,7 @@ export function GameApp() {
   );
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-bg text-fg">
+    <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-bg text-fg">
       <div className="relative min-h-0 flex-1 px-3 pt-[max(0.65rem,env(safe-area-inset-top))] pb-2">
         <div className="relative h-full overflow-hidden rounded-lg">
           <canvas
@@ -175,6 +177,7 @@ export function GameApp() {
             aria-label="Packline endless runner"
           />
 
+          {!intro ? (
           <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 px-3 pt-3 [text-shadow:0_1px_10px_rgba(20,28,16,0.7)]">
             <div className="flex flex-col gap-0.5">
               <p className="font-display text-[10px] tracking-[0.28em] text-muted uppercase">Packline</p>
@@ -211,6 +214,7 @@ export function GameApp() {
               </Button>
             </div>
           </div>
+          ) : null}
 
           {playing ? (
             <div className="pointer-events-none absolute top-16 right-3 z-20 flex flex-col items-end gap-1">
@@ -240,7 +244,7 @@ export function GameApp() {
             style={{ transform: `scaleX(${Math.min(1, hud.distance / 2400)})` }}
           />
 
-          {overlay === "title" || overlay === "boot" ? (
+          {!intro && (overlay === "title" || overlay === "boot") ? (
             <div
               data-ui
               className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-4"
@@ -379,6 +383,8 @@ export function GameApp() {
           ) : null}
         </div>
       </div>
+
+      {intro ? <BootIntro ready={hud.ready} onDone={() => setIntro(false)} /> : null}
 
       {playing || overlay === "dying" ? (
         <div
