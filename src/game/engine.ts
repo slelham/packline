@@ -58,7 +58,7 @@ const HOOP_W = 128;
 const HOOP_HOLE_TOP = 286;
 const HOOP_HOLE_H = 262;
 
-type Kind = "hurdle" | "hoop" | "tunnel" | "weave" | "crate" | "hydrant" | "pipe" | "plat";
+type Kind = "hurdle" | "hoop" | "tunnel" | "crate" | "hydrant" | "pipe" | "plat";
 
 type Obstacle = {
   active: boolean;
@@ -738,42 +738,40 @@ export class PacklineGame {
     if (this.lastKind === "plat") {
       if (r < 0.4) return "hoop";
       if (r < 0.7) return "hurdle";
-      return "weave";
+      return "crate";
     }
     if (this.lastKind === "tunnel" || this.lastKind === "pipe") {
       if (r < 0.45) return "hoop";
       if (r < 0.7) return "hurdle";
-      return p > 0.5 ? "crate" : "weave";
+      return p > 0.5 ? "crate" : "hydrant";
     }
     if (p > 0.14 && r < 0.18) return "plat";
     if (p < 0.1) return r < 0.58 ? "hurdle" : "hoop";
     if (p < 0.22) {
-      if (r < 0.38) return "hoop";
-      if (r < 0.72) return "hurdle";
-      return "weave";
+      if (r < 0.42) return "hoop";
+      if (r < 0.78) return "hurdle";
+      return "hydrant";
     }
     if (p < 0.38) {
       if (r < 0.28) return "tunnel";
       if (r < 0.5) return "hoop";
       if (r < 0.74) return "hurdle";
-      if (r < 0.88) return "weave";
+      if (r < 0.88) return "crate";
       return "hydrant";
     }
     if (p < 0.58) {
       if (r < 0.2) return "tunnel";
       if (r < 0.36) return "crate";
       if (r < 0.52) return "hydrant";
-      if (r < 0.7) return "hoop";
-      if (r < 0.86) return "hurdle";
-      return "weave";
+      if (r < 0.72) return "hoop";
+      return "hurdle";
     }
     if (r < 0.16) return "pipe";
     if (r < 0.32) return "tunnel";
-    if (r < 0.48) return "crate";
-    if (r < 0.62) return "hydrant";
-    if (r < 0.76) return "hoop";
-    if (r < 0.9) return "hurdle";
-    return "weave";
+    if (r < 0.5) return "crate";
+    if (r < 0.66) return "hydrant";
+    if (r < 0.84) return "hoop";
+    return "hurdle";
   }
 
   private placeObstacle(kind: Kind, x: number) {
@@ -794,9 +792,6 @@ export class PacklineGame {
       w = clamp(this.viewW * lerp(0.22, 0.34, p), 96, 150);
       h = 28;
       gap = TUNNEL_GAP;
-    } else if (kind === "weave") {
-      w = 36;
-      h = 48;
     } else if (kind === "crate") {
       w = 58;
       h = 46;
@@ -1041,9 +1036,7 @@ export class PacklineGame {
     if (ahead) {
       const local = x - ahead.x;
       const inside = local > -28 && local < ahead.w + 18;
-      if (ahead.kind === "weave") {
-        want = Math.sin((local / Math.max(24, ahead.w)) * Math.PI * 5) * 1.15;
-      } else if (inside || (ahead.x - x < this.speed * 0.22 && ahead.x - x > -20)) {
+      if (inside || (ahead.x - x < this.speed * 0.22 && ahead.x - x > -20)) {
         want = this.cat.side * 1.05;
       }
       if (local > ahead.w + 4 && this.cat.marked !== ahead.x) {
@@ -1069,7 +1062,7 @@ export class PacklineGame {
   }
 
   private collides(box: { x: number; y: number; w: number; h: number }, o: Obstacle) {
-    const padX = o.kind === "hoop" ? o.w * 0.28 : o.kind === "weave" ? 8 : 12;
+    const padX = o.kind === "hoop" ? o.w * 0.28 : 12;
     const x = o.x + padX;
     const w = Math.max(16, o.w - padX * 2);
     if (o.kind === "plat") {
@@ -1631,12 +1624,6 @@ export class PacklineGame {
           dh = 328;
           dx = o.x + o.w * 0.5 - dw * 0.5;
           dy = g - dh + 10;
-        } else if (o.kind === "weave") {
-          img = spr.weave;
-          dw = 42;
-          dh = o.h + 44;
-          dx = o.x + o.w * 0.5 - 21;
-          dy = g - dh + 6;
         } else if (o.kind === "crate") {
           img = spr.crate;
           dw = o.w + 18;

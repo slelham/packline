@@ -13,7 +13,6 @@ export type SpriteBank = {
   hurdle: HTMLImageElement;
   hoop: HTMLImageElement;
   tunnel: HTMLImageElement;
-  weave: HTMLImageElement;
   crate: HTMLImageElement;
   hydrant: HTMLImageElement;
   pipe: HTMLImageElement;
@@ -53,7 +52,7 @@ async function loadDog(id: DogId): Promise<ActionSheets> {
 }
 
 export async function loadSprites(): Promise<SpriteBank> {
-  const [dogs, coin, cookie, steak, impact, dust, hurdle, hoop, tunnel, weave, crate, hydrant, pipe, platform, catRun, catJump] = await Promise.all([
+  const [dogs, coin, cookie, steak, impact, dust, hurdle, hoop, tunnel, crate, hydrant, pipe, platform, catRun, catJump] = await Promise.all([
     Promise.all(DOG_IDS.map((id) => loadDog(id))),
     Promise.all(seq("fx", "treat", 4)),
     Promise.all(seq("fx", "cookie", 4)),
@@ -63,7 +62,6 @@ export async function loadSprites(): Promise<SpriteBank> {
     loadImage("/sprites/obstacles/hurdle.png"),
     loadImage("/sprites/obstacles/hoop.png"),
     loadImage("/sprites/obstacles/tunnel.png"),
-    loadImage("/sprites/obstacles/weave.png"),
     loadImage("/sprites/obstacles/crate.png"),
     loadImage("/sprites/obstacles/hydrant.png"),
     loadImage("/sprites/obstacles/pipe.png"),
@@ -81,7 +79,6 @@ export async function loadSprites(): Promise<SpriteBank> {
     hurdle,
     hoop,
     tunnel,
-    weave,
     crate,
     hydrant,
     pipe,
