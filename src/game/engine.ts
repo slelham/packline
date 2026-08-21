@@ -133,6 +133,7 @@ export class PacklineGame {
   private viewW = PLAY_W;
   private viewH = PLAY_H;
   private ground = PLAY_H - 118;
+  private camY = 0;
   private reduced = false;
   private running = false;
   private phase: Phase = "boot";
@@ -581,6 +582,7 @@ export class PacklineGame {
     this.inTunnel = false;
     this.distance = 0;
     this.speed = BASE_SPEED;
+    this.camY = 0;
     this.newBest = false;
     this.player.y = this.ground;
     this.player.vy = 0;
@@ -843,13 +845,13 @@ export class PacklineGame {
 
   private spawnPlatforms(x: number) {
     const p = this.progress();
-    const peak = this.jumpPeak();
-    const n = p > 0.48 ? 4 : 3;
+    const n = p > 0.55 ? 5 : 4;
+    const step = lerp(108, 132, p);
     const rises: number[] = [];
-    let rise = clamp(peak * 0.3, 54, 72);
+    let rise = 68;
     for (let i = 0; i < n; i++) {
-      rises.push(rise);
-      rise += clamp(peak * lerp(0.2, 0.28, p), 40, 62);
+      rises.push(Math.min(390, rise));
+      rise += step;
     }
     let cx = x;
     let last: Obstacle | null = null;
@@ -857,16 +859,14 @@ export class PacklineGame {
       const o = this.placeObstacle("plat", cx);
       if (!o) break;
       const t = i / Math.max(1, n - 1);
-      o.w = lerp(148, 68, t);
+      o.w = lerp(128, 54, t);
       o.gap = rises[i]!;
       this.sitObstacle(o);
-      if (i < n - 1) {
-        this.placeCoin(o.x + o.w * 0.5, o.y - 22);
-      }
+      if (i < n - 1) this.placeCoin(o.x + o.w * 0.5, o.y - 24);
       last = o;
-      cx += o.w + lerp(48, 108, t * (0.55 + p * 0.5));
+      cx += o.w + lerp(62, 128, t * (0.65 + p * 0.4));
     }
-    if (last) this.placeCoin(last.x + last.w * 0.72, last.y - 40, 22, 2);
+    if (last) this.placeCoin(last.x + last.w * 0.55, Math.max(28, last.y - 52), 22, 2);
     return last;
   }
 
@@ -991,10 +991,14 @@ export class PacklineGame {
     }
 
     if (p.y >= floor) {
-      if (!p.grounded) this.land();
-      p.y = floor;
-      p.vy = 0;
-      p.grounded = true;
+      if (floor < this.ground - 10) {
+        this.bounceOff(floor);
+      } else {
+        if (!p.grounded) this.land();
+        p.y = floor;
+        p.vy = 0;
+        p.grounded = true;
+      }
     } else {
       p.grounded = false;
     }
@@ -1013,6 +1017,9 @@ export class PacklineGame {
     const k = 1 - Math.exp(-18 * dt);
     p.squash += (targetSquash - p.squash) * k;
     p.stretch += (targetStretch - p.stretch) * k;
+
+    const wantCam = p.y < this.ground - 140 ? clamp(this.ground - 250 - p.y, 0, 260) : 0;
+    this.camY += (wantCam - this.camY) * (1 - Math.exp(-10 * dt));
   }
 
   private catLead() {
@@ -1053,6 +1060,27 @@ export class PacklineGame {
     }
     const k = 1 - Math.exp(-14 * dt);
     this.cat.sway += (want - this.cat.sway) * k;
+  }
+
+  private bounceOff(floor: number) {
+    const p = this.player;
+    p.y = floor;
+    const held = this.input.jumpHeld || this.jumpBuf > 0;
+    const boost = held ? 1.22 : 1.04;
+    p.vy = JUMP_VEL * this.dog().jump * boost;
+    p.grounded = false;
+    p.coyote = 0;
+    p.airJumps = 1;
+    this.jumpBuf = 0;
+    p.sliding = false;
+    p.jumpStretch = 0.2;
+    p.squash = 0.68;
+    p.landKick = 0.1;
+    this.audio.jump();
+    this.spawnBurst(p.x, floor, "dust");
+    for (let i = 0; i < 5; i++) {
+      this.emitParticle(p.x, floor - 2, -70 + Math.random() * 140, -160 + Math.random() * 40, 0.32, 4, "#ece8dc");
+    }
   }
 
   private land() {
@@ -1402,7 +1430,7 @@ export class PacklineGame {
     const ox = shake ? (Math.random() * 2 - 1) * 18 * shake : 0;
     const oy = shake ? (Math.random() * 2 - 1) * 12 * shake : 0;
     ctx.save();
-    ctx.translate(ox, oy);
+    ctx.translate(ox, oy - this.camY);
 
     this.drawSky();
     this.drawClouds();
