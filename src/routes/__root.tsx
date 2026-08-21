@@ -4,6 +4,9 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Packline";
+const SITE = "https://packline-eight.vercel.app";
+const DESCRIPTION =
+  "Remy, Coco, Teddy, and Osha run the park. Jump, slide, chain combos, grab treats. Slide a tunnel for a star.";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -12,10 +15,21 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" },
       { title: APP_NAME },
       { name: "theme-color", content: "#0b1220" },
-      {
-        name: "description",
-        content: "Pick Remy, Teddy, or Osha. Jump, slide, chain combos, grab treats, and run the park.",
-      },
+      { name: "description", content: DESCRIPTION },
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: APP_NAME },
+      { property: "og:title", content: "Packline" },
+      { property: "og:description", content: DESCRIPTION },
+      { property: "og:url", content: SITE },
+      { property: "og:image", content: `${SITE}/og.jpg` },
+      { property: "og:image:type", content: "image/jpeg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "Remy, Coco, Teddy, and Osha running a park agility course" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Packline" },
+      { name: "twitter:description", content: DESCRIPTION },
+      { name: "twitter:image", content: `${SITE}/og.jpg` },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
