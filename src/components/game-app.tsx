@@ -196,11 +196,7 @@ export function GameApp() {
   }
 
   function shareRun() {
-    const host = typeof window !== "undefined" ? window.location.hostname : "";
-    const url =
-      host.endsWith(".grok.me") || host.endsWith(".vercel.app")
-        ? window.location.origin
-        : "https://packline-eight.vercel.app";
+    const url = typeof window !== "undefined" ? window.location.origin : "";
     const text = `${dog.name} ran ${formatScore(hud.score)} on Packline — ${url}`;
     if (navigator.share) {
       void navigator.share({ title: "Packline", text, url }).catch(() => {});
