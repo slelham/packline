@@ -47,6 +47,7 @@ const JUMP_VEL = -840;
 const MAX_FALL = 1320;
 const COYOTE = 0.16;
 const JUMP_BUF = 0.14;
+const AIR_JUMPS = 2;
 const SLIDE_TIME = 0.72;
 const HITSTOP = 0.08;
 const DIE_TIME = 0.78;
@@ -58,7 +59,7 @@ const HOOP_W = 128;
 const HOOP_HOLE_TOP = 286;
 const HOOP_HOLE_H = 262;
 
-type Kind = "hurdle" | "hoop" | "tunnel" | "crate" | "hydrant" | "pipe" | "plat";
+type Kind = "hurdle" | "hoop" | "tunnel" | "crate" | "hydrant" | "pipe";
 
 type Obstacle = {
   active: boolean;
@@ -165,7 +166,7 @@ export class PacklineGame {
     anim: 0,
     landKick: 0,
     jumpStretch: 0,
-    airJumps: 1,
+    airJumps: AIR_JUMPS,
   };
   private cat = {
     y: 0,
@@ -490,9 +491,6 @@ export class PacklineGame {
       o.y = g - o.h;
       o.holeY = g - HOOP_HOLE_TOP;
       o.holeH = HOOP_HOLE_H;
-    } else if (o.kind === "plat") {
-      o.h = 18;
-      o.y = g - o.gap;
     } else {
       o.y = g - o.h;
     }
@@ -595,7 +593,7 @@ export class PacklineGame {
     this.player.anim = 0;
     this.player.landKick = 0;
     this.player.jumpStretch = 0;
-    this.player.airJumps = 1;
+    this.player.airJumps = AIR_JUMPS;
     this.cat.y = this.ground;
     this.cat.sway = 0;
     this.cat.side = 1;
@@ -713,15 +711,15 @@ export class PacklineGame {
       : Math.max(this.nextSpawn, this.viewW + 160);
     if (spawnX > this.viewW + lead) return;
 
-    const kind = this.pickKind(p);
-    if (kind === "plat") {
-      const last = this.spawnPlatforms(spawnX);
-      const span = last ? last.x + last.w - spawnX : 220;
-      this.lastKind = "plat";
-      this.nextSpawn = spawnX + Math.max(minGap, span + 110);
+    if (p > 0.1 && this.spawnCount > 1 && this.spawnCount % 8 === 0) {
+      this.spawnSteakRun(spawnX);
+      this.lastKind = "hoop";
+      this.nextSpawn = spawnX + minGap + 50;
       this.spawnCount += 1;
       return;
     }
+
+    const kind = this.pickKind(p);
     const extra = kind === "tunnel" ? this.speed * 0.12 : 0;
     const first = this.placeObstacle(kind, spawnX + extra);
     this.lastKind = kind;
@@ -741,17 +739,11 @@ export class PacklineGame {
 
   private pickKind(p: number): Kind {
     const r = Math.random();
-    if (this.lastKind === "plat") {
-      if (r < 0.4) return "hoop";
-      if (r < 0.7) return "hurdle";
-      return "crate";
-    }
     if (this.lastKind === "tunnel" || this.lastKind === "pipe") {
       if (r < 0.45) return "hoop";
       if (r < 0.7) return "hurdle";
       return p > 0.5 ? "crate" : "hydrant";
     }
-    if (p > 0.14 && r < 0.18) return "plat";
     if (p < 0.1) return r < 0.58 ? "hurdle" : "hoop";
     if (p < 0.22) {
       if (r < 0.42) return "hoop";
@@ -808,10 +800,6 @@ export class PacklineGame {
       w = clamp(this.viewW * 0.22, 90, 150);
       h = 24;
       gap = 56;
-    } else if (kind === "plat") {
-      w = lerp(150, 210, Math.random());
-      h = 18;
-      gap = clamp(this.jumpPeak() * 0.4, 70, 108);
     }
     o.active = true;
     o.kind = kind;
@@ -832,7 +820,7 @@ export class PacklineGame {
       this.placeCoin(x + w * 0.5, g - o.gap - 36);
       this.placeCoin(x + w * 0.32, g - 26);
       this.placeCoin(x + w * 0.68, g - 26);
-    } else if (kind !== "pipe" && kind !== "plat") {
+    } else if (kind !== "pipe") {
       const n = 1 + Math.floor(Math.random() * 3);
       const lift = clamp(stand * 0.55 + peak * 0.18, 48, 92);
       for (let i = 0; i < n; i++) {
@@ -843,31 +831,15 @@ export class PacklineGame {
     return o;
   }
 
-  private spawnPlatforms(x: number) {
-    const p = this.progress();
-    const n = p > 0.62 ? 4 : 3;
-    const step = lerp(88, 110, p);
-    const rises: number[] = [];
-    let rise = 64;
-    for (let i = 0; i < n; i++) {
-      rises.push(Math.min(340, rise));
-      rise += step;
+  private spawnSteakRun(x: number) {
+    const peak = this.jumpPeak();
+    const steps = [0.48, 1.02, 1.52, 2.08];
+    for (let i = 0; i < steps.length; i++) {
+      const y = this.ground - peak * steps[i]!;
+      const cx = x + i * 38;
+      if (i < steps.length - 1) this.placeCoin(cx, y);
+      else this.placeCoin(cx, y, 22, 2);
     }
-    let cx = x;
-    let last: Obstacle | null = null;
-    for (let i = 0; i < n; i++) {
-      const o = this.placeObstacle("plat", cx);
-      if (!o) break;
-      const t = i / Math.max(1, n - 1);
-      o.w = lerp(268, 168, t);
-      o.gap = rises[i]!;
-      this.sitObstacle(o);
-      if (i < n - 1) this.placeCoin(o.x + o.w * 0.5, o.y - 24);
-      last = o;
-      cx += o.w + lerp(36, 64, t);
-    }
-    if (last) this.placeCoin(last.x + last.w * 0.62, last.y - 28, 22, 2);
-    return last;
   }
 
   private placeCoin(x: number, y: number, r = 15, skin?: number) {
@@ -951,15 +923,16 @@ export class PacklineGame {
       p.vy = JUMP_VEL * this.dog().jump;
       p.grounded = false;
       p.coyote = 0;
-      p.airJumps = 1;
+      p.airJumps = AIR_JUMPS;
       this.jumpBuf = 0;
       p.sliding = false;
       p.jumpStretch = 0.16;
       p.squash = 0.78;
       this.audio.jump();
     } else if (this.jumpBuf > 0 && !p.grounded && p.airJumps > 0) {
-      p.vy = JUMP_VEL * this.dog().jump * 0.9;
-      p.airJumps = 0;
+      const scale = p.airJumps >= 2 ? 0.92 : 0.84;
+      p.vy = JUMP_VEL * this.dog().jump * scale;
+      p.airJumps -= 1;
       this.jumpBuf = 0;
       p.sliding = false;
       p.jumpStretch = 0.14;
@@ -976,30 +949,13 @@ export class PacklineGame {
       p.vy = 0;
     }
 
-    const prevY = p.y;
     p.y += p.vy * dt;
 
-    let floor = this.ground;
-    if (p.vy >= 0) {
-      for (const o of this.obstacles) {
-        if (!o.active || o.kind !== "plat") continue;
-        this.sitObstacle(o);
-        const top = o.y;
-        const over = p.x > o.x + 8 && p.x < o.x + o.w - 6;
-        if (over && prevY <= top + 1 && p.y >= top) floor = Math.min(floor, top);
-      }
-    }
-
-    if (p.y >= floor) {
-      const onPad = floor < this.ground - 10;
-      if (onPad && (this.input.jumpHeld || this.jumpBuf > 0)) {
-        this.bounceOff(floor);
-      } else {
-        if (!p.grounded) this.land();
-        p.y = floor;
-        p.vy = 0;
-        p.grounded = true;
-      }
+    if (p.y >= this.ground) {
+      if (!p.grounded) this.land();
+      p.y = this.ground;
+      p.vy = 0;
+      p.grounded = true;
     } else {
       p.grounded = false;
     }
@@ -1063,30 +1019,9 @@ export class PacklineGame {
     this.cat.sway += (want - this.cat.sway) * k;
   }
 
-  private bounceOff(floor: number) {
-    const p = this.player;
-    p.y = floor;
-    const held = this.input.jumpHeld || this.jumpBuf > 0;
-    const boost = held ? 1.22 : 1.04;
-    p.vy = JUMP_VEL * this.dog().jump * boost;
-    p.grounded = false;
-    p.coyote = 0;
-    p.airJumps = 1;
-    this.jumpBuf = 0;
-    p.sliding = false;
-    p.jumpStretch = 0.2;
-    p.squash = 0.68;
-    p.landKick = 0.1;
-    this.audio.jump();
-    this.spawnBurst(p.x, floor, "dust");
-    for (let i = 0; i < 5; i++) {
-      this.emitParticle(p.x, floor - 2, -70 + Math.random() * 140, -160 + Math.random() * 40, 0.32, 4, "#ece8dc");
-    }
-  }
-
   private land() {
     const p = this.player;
-    p.airJumps = 1;
+    p.airJumps = AIR_JUMPS;
     p.landKick = 0.12;
     p.squash = 0.76;
     p.stretch = 1.22;
@@ -1101,10 +1036,6 @@ export class PacklineGame {
     const padX = o.kind === "hoop" ? o.w * 0.28 : 12;
     const x = o.x + padX;
     const w = Math.max(16, o.w - padX * 2);
-    if (o.kind === "plat") {
-      if (box.y + box.h <= o.y + 10) return false;
-      return aabb(box.x, box.y, box.w, box.h, o.x + 2, o.y, 12, o.h);
-    }
     if (o.kind === "hoop" && o.holeH > 0) {
       const topH = Math.max(0, o.holeY - o.y - 8);
       const botY = o.holeY + o.holeH + 10;
@@ -1135,7 +1066,6 @@ export class PacklineGame {
       }
       this.sitObstacle(o);
       if (this.collides(box, o)) {
-        if (o.kind === "plat") continue;
         if (this.boostT > 0) {
           this.smash(o);
           continue;
@@ -1693,22 +1623,6 @@ export class PacklineGame {
         this.drawPlanted(spr.hydrant, cx, o.h + 20, 4);
       } else if (o.kind === "pipe") {
         this.drawPlanted(spr.tunnel, cx, 58, 6);
-      } else if (o.kind === "plat") {
-        const ctx = this.ctx;
-        ctx.fillStyle = "#5a3a1c";
-        const stiltH = Math.max(8, g - o.y - 8);
-        const legs = o.w > 200 ? [0.12, 0.5, 0.88] : [0.16, 0.84];
-        for (const u of legs) {
-          const lx = o.x + o.w * u;
-          ctx.fillRect(lx - 4, o.y + 16, 8, stiltH);
-          ctx.fillStyle = "#6b4420";
-          ctx.fillRect(lx - 11, g - 5, 22, 7);
-          this.contactShadow(lx, g + 4, 14, 4);
-          ctx.fillStyle = "#5a3a1c";
-        }
-        const dw = o.w + 16;
-        const dh = 36;
-        ctx.drawImage(spr.platform, o.x - 8, o.y - 8, dw, dh);
       } else {
         this.drawPlanted(spr.hurdle, cx, o.h + 28, 5);
       }
