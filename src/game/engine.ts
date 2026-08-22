@@ -845,12 +845,12 @@ export class PacklineGame {
 
   private spawnPlatforms(x: number) {
     const p = this.progress();
-    const n = p > 0.55 ? 5 : 4;
-    const step = lerp(108, 132, p);
+    const n = p > 0.62 ? 4 : 3;
+    const step = lerp(88, 110, p);
     const rises: number[] = [];
-    let rise = 68;
+    let rise = 64;
     for (let i = 0; i < n; i++) {
-      rises.push(Math.min(390, rise));
+      rises.push(Math.min(340, rise));
       rise += step;
     }
     let cx = x;
@@ -859,14 +859,14 @@ export class PacklineGame {
       const o = this.placeObstacle("plat", cx);
       if (!o) break;
       const t = i / Math.max(1, n - 1);
-      o.w = lerp(128, 54, t);
+      o.w = lerp(268, 168, t);
       o.gap = rises[i]!;
       this.sitObstacle(o);
       if (i < n - 1) this.placeCoin(o.x + o.w * 0.5, o.y - 24);
       last = o;
-      cx += o.w + lerp(62, 128, t * (0.65 + p * 0.4));
+      cx += o.w + lerp(36, 64, t);
     }
-    if (last) this.placeCoin(last.x + last.w * 0.55, Math.max(28, last.y - 52), 22, 2);
+    if (last) this.placeCoin(last.x + last.w * 0.62, last.y - 28, 22, 2);
     return last;
   }
 
@@ -991,7 +991,8 @@ export class PacklineGame {
     }
 
     if (p.y >= floor) {
-      if (floor < this.ground - 10) {
+      const onPad = floor < this.ground - 10;
+      if (onPad && (this.input.jumpHeld || this.jumpBuf > 0)) {
         this.bounceOff(floor);
       } else {
         if (!p.grounded) this.land();
@@ -1652,8 +1653,13 @@ export class PacklineGame {
     const dw = dh * (img.width / Math.max(1, img.height));
     const dy = this.ground - dh + plant;
     const dx = cx - dw * 0.5;
-    this.contactShadow(cx, this.ground + 5, Math.max(16, dw * 0.26), 5);
-    this.ctx.drawImage(img, dx, dy, dw, dh);
+    const ctx = this.ctx;
+    ctx.fillStyle = "#c4a56a";
+    ctx.beginPath();
+    ctx.ellipse(cx, this.ground + 6, Math.max(18, dw * 0.22), 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    this.contactShadow(cx, this.ground + 7, Math.max(16, dw * 0.28), 6);
+    ctx.drawImage(img, dx, dy, dw, dh);
   }
 
   private drawObstacles(front: boolean) {
@@ -1673,7 +1679,14 @@ export class PacklineGame {
         continue;
       }
       if (o.kind === "hoop") {
-        this.drawPlanted(spr.hoop, cx, 300, 6);
+        this.drawPlanted(spr.hoop, cx, HOOP_H + 24, 24);
+        const ctx = this.ctx;
+        ctx.fillStyle = "#d5dae4";
+        ctx.fillRect(cx - 52, g - 18, 9, 24);
+        ctx.fillRect(cx + 43, g - 18, 9, 24);
+        ctx.fillStyle = "#b39158";
+        ctx.fillRect(cx - 58, g + 2, 22, 6);
+        ctx.fillRect(cx + 36, g + 2, 22, 6);
       } else if (o.kind === "crate") {
         this.drawPlanted(spr.crate, cx, o.h + 16, 5);
       } else if (o.kind === "hydrant") {
@@ -1684,13 +1697,15 @@ export class PacklineGame {
         const ctx = this.ctx;
         ctx.fillStyle = "#5a3a1c";
         const stiltH = Math.max(8, g - o.y - 8);
-        ctx.fillRect(o.x + 10, o.y + 16, 7, stiltH);
-        ctx.fillRect(o.x + o.w - 16, o.y + 16, 7, stiltH);
-        ctx.fillStyle = "#6b4420";
-        ctx.fillRect(o.x + 4, g - 5, 20, 7);
-        ctx.fillRect(o.x + o.w - 22, g - 5, 20, 7);
-        this.contactShadow(o.x + 14, g + 4, 14, 4);
-        this.contactShadow(o.x + o.w - 12, g + 4, 14, 4);
+        const legs = o.w > 200 ? [0.12, 0.5, 0.88] : [0.16, 0.84];
+        for (const u of legs) {
+          const lx = o.x + o.w * u;
+          ctx.fillRect(lx - 4, o.y + 16, 8, stiltH);
+          ctx.fillStyle = "#6b4420";
+          ctx.fillRect(lx - 11, g - 5, 22, 7);
+          this.contactShadow(lx, g + 4, 14, 4);
+          ctx.fillStyle = "#5a3a1c";
+        }
         const dw = o.w + 16;
         const dh = 36;
         ctx.drawImage(spr.platform, o.x - 8, o.y - 8, dw, dh);
