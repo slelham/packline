@@ -8,7 +8,7 @@ function Login() {
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-6 text-fg">
       <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-6 shadow-panel">
-        <p className="text-xs tracking-[0.28em] text-muted uppercase">Packline</p>
+        <p className="text-xs tracking-[0.28em] text-muted uppercase">Dog Park</p>
         <h1 className="font-display mt-2 text-3xl font-extrabold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-muted">Keep your run identity. High scores still save on this device either way.</p>
         <div className="mt-6 space-y-2">

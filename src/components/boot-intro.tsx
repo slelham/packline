@@ -98,7 +98,7 @@ export function BootIntro({ ready, onDone }: Props) {
         The pack
       </p>
       <h1 data-mark className="font-display mt-2 text-5xl leading-none font-extrabold tracking-tight sm:text-6xl">
-        Packline
+        Dog Park
       </h1>
       <p data-sub className="mt-2 text-sm text-muted">
         Four dogs. One park.

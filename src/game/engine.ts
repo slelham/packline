@@ -207,12 +207,11 @@ export class PacklineGame {
   private frenzyT = 0;
   private invulnT = 0;
   private boostT = 0;
-  private usedRevive = false;
+  private reviveCount = 0;
   private pickups: Pickup[] = [];
   private spawnCount = 0;
   private biome: Biome = "park";
   private lastBiome: Biome = "park";
-  readonly reviveCost = 40;
 
   constructor(canvas: HTMLCanvasElement, onHud: HudListener) {
     this.canvas = canvas;
@@ -329,11 +328,16 @@ export class PacklineGame {
     this.input.releaseJump();
   }
 
+  continueCost() {
+    return 10 + this.reviveCount * 5;
+  }
+
   revive() {
-    if (this.phase !== "gameover" || this.usedRevive) return false;
-    if (this.save.treats < this.reviveCost) return false;
-    this.save.treats -= this.reviveCost;
-    this.usedRevive = true;
+    if (this.phase !== "gameover") return false;
+    const cost = this.continueCost();
+    if (this.save.treats < cost) return false;
+    this.save.treats -= cost;
+    this.reviveCount += 1;
     writeSave(this.save);
     this.audio.unlock();
     this.audio.revive();
@@ -630,7 +634,7 @@ export class PacklineGame {
     this.frenzyT = 0;
     this.invulnT = 0;
     this.boostT = 0;
-    this.usedRevive = false;
+    this.reviveCount = 0;
     this.spawnCount = 0;
     if (this.kids()) this.magnetT = 8;
     this.biome = "park";
@@ -1268,7 +1272,7 @@ export class PacklineGame {
     this.lastRunCombo = this.maxCombo;
     this.lastRunThreads = this.threads;
     this.lastRunTunnels = this.tunnels;
-    this.save.gamesPlayed += 1;
+    if (this.reviveCount === 0) this.save.gamesPlayed += 1;
     this.save.treats += this.runTreats;
     if (this.maxCombo > this.save.bestCombo) this.save.bestCombo = this.maxCombo;
     if (this.distance > this.save.bestDistance) this.save.bestDistance = this.distance;
@@ -1278,6 +1282,7 @@ export class PacklineGame {
       this.newBest = true;
     }
     this.bumpMissions();
+    this.runTreats = 0;
     writeSave(this.save);
     this.hudDirty = true;
   }
@@ -1344,7 +1349,7 @@ export class PacklineGame {
   }
 
   private emitHud() {
-    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${Math.ceil(this.boostT)}|${this.biome}|${this.usedRevive}|${this.save.kids}`;
+    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${Math.ceil(this.boostT)}|${this.biome}|${this.reviveCount}|${this.save.kids}`;
     if (snap === this.hudKey) return;
     this.hudKey = snap;
     this.onHud({
@@ -1370,8 +1375,8 @@ export class PacklineGame {
       magnet: this.magnetT,
       frenzy: this.frenzyT,
       boost: this.boostT,
-      canRevive: this.phase === "gameover" && !this.usedRevive && this.save.treats >= this.reviveCost,
-      reviveCost: this.reviveCost,
+      canRevive: this.phase === "gameover" && this.save.treats >= this.continueCost(),
+      reviveCost: this.continueCost(),
       biome: this.biome,
       missions: toHud(this.save.missions),
       kids: this.save.kids,

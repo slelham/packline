@@ -36,7 +36,7 @@ const idleHud: HudState = {
   frenzy: 0,
   boost: 0,
   canRevive: false,
-  reviveCost: 40,
+  reviveCost: 10,
   biome: "park",
   missions: [],
   kids: false,
@@ -198,9 +198,9 @@ export function GameApp() {
 
   function shareRun() {
     const url = typeof window !== "undefined" ? window.location.origin : "";
-    const text = `${dog.name} ran ${formatScore(hud.score)} on Packline — ${url}`;
+    const text = `${dog.name} ran ${formatScore(hud.score)} on Dog Park — ${url}`;
     if (navigator.share) {
-      void navigator.share({ title: "Packline", text, url }).catch(() => {});
+      void navigator.share({ title: "Dog Park", text, url }).catch(() => {});
     } else if (navigator.clipboard) {
       void navigator.clipboard.writeText(text);
     }
@@ -222,13 +222,13 @@ export function GameApp() {
           <canvas
             ref={canvasRef}
             className="absolute inset-0 z-0 h-full w-full touch-none"
-            aria-label="Packline endless runner"
+            aria-label="Dog Park endless runner"
           />
 
           {!intro ? (
           <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 px-3 pt-3 [text-shadow:0_1px_10px_rgba(20,28,16,0.7)]">
             <div className="flex flex-col gap-0.5">
-              <p className="font-display text-[10px] tracking-[0.28em] text-muted uppercase">Packline</p>
+              <p className="font-display text-[10px] tracking-[0.28em] text-muted uppercase">Dog Park</p>
               <p className="font-mono text-3xl leading-none font-semibold tabular-nums">
                 {formatScore(playing || overlay === "dying" || overlay === "gameover" ? hud.score : hud.highScore)}
               </p>
@@ -303,7 +303,7 @@ export function GameApp() {
               className="absolute inset-x-0 bottom-0 z-30 max-h-[82%] overflow-y-auto bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-8 pb-4"
             >
               <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
-              <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
+              <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Dog Park</h1>
               <p className="mt-1 text-center text-sm text-muted">
                 {hud.kids ? "Kids mode: slower, bigger gaps, magnet on." : "Triple-jump the treat trail. Steak at the top is 50."}
               </p>
@@ -433,6 +433,10 @@ export function GameApp() {
                   Continue · {hud.reviveCost} treats
                 </Button>
               ) : null}
+              <p className="mt-1 text-center text-xs text-muted">
+                {hud.treats} in the bank
+                {hud.canRevive ? ` · next continue ${hud.reviveCost}` : hud.treats < 10 ? " · need 10 to continue" : ""}
+              </p>
               <Button
                 type="button"
                 data-ui
