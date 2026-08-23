@@ -1,11 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Packline">
-  <rect width="32" height="32" fill="#0b1220"/>
-  <ellipse cx="16" cy="20.5" rx="9.2" ry="7.2" fill="#ece8dc"/>
-  <circle cx="7.6" cy="12.4" r="3.2" fill="#ece8dc"/>
-  <circle cx="13.2" cy="8.6" r="3.1" fill="#ece8dc"/>
-  <circle cx="20.4" cy="8.8" r="3.1" fill="#ece8dc"/>
-  <circle cx="25.2" cy="13.2" r="3.2" fill="#ece8dc"/>
-  <circle cx="12.4" cy="19.2" r="1.7" fill="#5ec8c4"/>
-  <circle cx="19.6" cy="19.2" r="1.7" fill="#5ec8c4"/>
-  <ellipse cx="16" cy="23.6" rx="1.5" ry="1.1" fill="#0b1220"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Dog Park">
+  <rect width="32" height="32" rx="8" fill="#0b1220"/>
+  <circle cx="8.4" cy="10.2" r="4.4" fill="#ece8dc"/>
+  <circle cx="23.6" cy="10.2" r="4.4" fill="#ece8dc"/>
+  <circle cx="16" cy="17.4" r="9.2" fill="#ece8dc"/>
+  <path d="M7.6 15.4c2.8 2.8 13.8 2.8 16.8 0-1.2 3.4-5.2 5.8-8.4 5.8s-7.2-2.4-8.4-5.8z" fill="#5ec8c4"/>
+  <circle cx="12.4" cy="16.6" r="1.55" fill="#0b1220"/>
+  <circle cx="19.6" cy="16.6" r="1.55" fill="#0b1220"/>
+  <ellipse cx="16" cy="21.6" rx="1.7" ry="1.25" fill="#0b1220"/>
 </svg>
