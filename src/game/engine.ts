@@ -36,6 +36,7 @@ export type HudState = {
   reviveCost: number;
   biome: Biome;
   missions: MissionHud[];
+  kids: boolean;
 };
 
 export type HudListener = (s: HudState) => void;
@@ -267,7 +268,7 @@ export class PacklineGame {
     this.audio.unlock();
     this.resetRun();
     this.phase = "playing";
-    this.startGrace = 0.32;
+    this.startGrace = this.kids() ? 0.7 : 0.32;
     this.hudKey = "";
     this.emitHud();
   }
@@ -278,7 +279,7 @@ export class PacklineGame {
     this.audio.unlock();
     this.resetRun();
     this.phase = "playing";
-    this.startGrace = 0.28;
+    this.startGrace = this.kids() ? 0.7 : 0.28;
     this.hudKey = "";
     this.emitHud();
   }
@@ -287,6 +288,17 @@ export class PacklineGame {
     this.audio.unlock();
     this.resetRun();
     this.phase = "title";
+    this.hudKey = "";
+    this.emitHud();
+  }
+
+  private kids() {
+    return this.save.kids;
+  }
+
+  setKids(on: boolean) {
+    this.save.kids = on;
+    writeSave(this.save);
     this.hudKey = "";
     this.emitHud();
   }
@@ -620,6 +632,7 @@ export class PacklineGame {
     this.boostT = 0;
     this.usedRevive = false;
     this.spawnCount = 0;
+    if (this.kids()) this.magnetT = 8;
     this.biome = "park";
     this.lastBiome = "park";
     this.skyGrad = null;
@@ -628,12 +641,14 @@ export class PacklineGame {
   }
 
   private progress() {
-    return clamp(this.distance / 1400, 0, 1);
+    return clamp(this.distance / (this.kids() ? 2400 : 1400), 0, 1);
   }
 
   private stepPlay(dt: number) {
     const p = this.progress();
-    this.speed = lerp(BASE_SPEED, MAX_SPEED, 1 - (1 - p) * (1 - p)) * this.dog().speed;
+    const lo = this.kids() ? 210 : BASE_SPEED;
+    const hi = this.kids() ? 430 : MAX_SPEED;
+    this.speed = lerp(lo, hi, 1 - (1 - p) * (1 - p)) * this.dog().speed;
     if (this.frenzyT > 0) this.speed *= 1.12;
     if (this.boostT > 0) this.speed *= 1.42;
     this.distance += this.speed * dt * 0.12;
@@ -701,11 +716,11 @@ export class PacklineGame {
 
   private spawnAhead() {
     const p = this.progress();
-    const timeGap = lerp(1.58, 0.68, p);
+    const timeGap = this.kids() ? lerp(1.9, 1.28, p) : lerp(1.58, 0.68, p);
     let right = -Infinity;
     for (const o of this.obstacles) if (o.active) right = Math.max(right, o.x + o.w);
     const lead = this.speed * 2.2 + 120;
-    const minGap = this.speed * timeGap + lerp(140, 32, p);
+    const minGap = this.speed * timeGap + lerp(this.kids() ? 180 : 140, this.kids() ? 90 : 32, p);
     const spawnX = Number.isFinite(right)
       ? right + minGap
       : Math.max(this.nextSpawn, this.viewW + 160);
@@ -724,7 +739,7 @@ export class PacklineGame {
     const first = this.placeObstacle(kind, spawnX + extra);
     this.lastKind = kind;
     let span = (first?.w ?? 80) + extra;
-    if (p > 0.26 && first && Math.random() < lerp(0.14, 0.5, p)) {
+    if (p > 0.26 && !this.kids() && first && Math.random() < lerp(0.14, 0.5, p)) {
       const follow: Kind = p > 0.7 && kind === "hurdle" ? "hurdle" : p > 0.55 && kind === "crate" ? "hydrant" : kind === "hoop" ? "hurdle" : "hoop";
       const gap = lerp(150, 64, p);
       const second = this.placeObstacle(follow, spawnX + extra + first.w + gap);
@@ -739,6 +754,11 @@ export class PacklineGame {
 
   private pickKind(p: number): Kind {
     const r = Math.random();
+    if (this.kids()) {
+      if (r < 0.5) return "hurdle";
+      if (r < 0.82) return "hoop";
+      return "tunnel";
+    }
     if (this.lastKind === "tunnel" || this.lastKind === "pipe") {
       if (r < 0.45) return "hoop";
       if (r < 0.7) return "hurdle";
@@ -780,7 +800,7 @@ export class PacklineGame {
     const peak = this.jumpPeak();
     const stand = 80 * this.dog().hitH;
     let w = 64;
-    let h = Math.round(lerp(36, 58, p));
+    let h = Math.round(lerp(36, this.kids() ? 42 : 58, p));
     let gap = 0;
     if (kind === "hoop") {
       w = HOOP_W;
@@ -833,7 +853,7 @@ export class PacklineGame {
 
   private spawnSteakRun(x: number) {
     const peak = this.jumpPeak();
-    const steps = [0.48, 1.02, 1.52, 2.08];
+    const steps = this.kids() ? [0.4, 0.78, 1.08, 1.32] : [0.48, 1.02, 1.52, 2.08];
     for (let i = 0; i < steps.length; i++) {
       const y = this.ground - peak * steps[i]!;
       const cx = x + i * 38;
@@ -888,13 +908,13 @@ export class PacklineGame {
     const p = this.player;
     const d = this.dog();
     if (p.sliding) {
-      const h = 32 * d.hitH;
+      const h = 32 * d.hitH * (this.kids() ? 0.82 : 1);
       const w = 70 * d.hitW;
       return { x: p.x - w * 0.38, y: p.y - h, w, h };
     }
     const air = !p.grounded;
-    const h = (air ? 50 : 68) * d.hitH;
-    const w = 36 * d.hitW;
+    const h = (air ? 50 : 68) * d.hitH * (this.kids() ? 0.82 : 1);
+    const w = 36 * d.hitW * (this.kids() ? 0.88 : 1);
     return { x: p.x - w * 0.42, y: p.y - h + (air ? 6 : 2), w, h };
   }
 
@@ -914,10 +934,10 @@ export class PacklineGame {
       if (p.slideT <= 0) p.sliding = false;
     }
 
-    if (p.grounded) p.coyote = COYOTE;
+    if (p.grounded) p.coyote = this.kids() ? 0.28 : COYOTE;
     else p.coyote = Math.max(0, p.coyote - dt);
 
-    if (this.input.consumeJump()) this.jumpBuf = JUMP_BUF;
+    if (this.input.consumeJump()) this.jumpBuf = this.kids() ? 0.22 : JUMP_BUF;
     this.jumpBuf = Math.max(0, this.jumpBuf - dt);
     if (this.jumpBuf > 0 && (p.grounded || p.coyote > 0)) {
       p.vy = JUMP_VEL * this.dog().jump;
@@ -1037,22 +1057,27 @@ export class PacklineGame {
     const x = o.x + padX;
     const w = Math.max(16, o.w - padX * 2);
     if (o.kind === "hoop" && o.holeH > 0) {
-      const topH = Math.max(0, o.holeY - o.y - 8);
+      const topH = Math.max(0, o.holeY - o.y - (this.kids() ? 16 : 8));
+      const hitTop = topH > 8 && aabb(box.x, box.y, box.w, box.h, x, o.y, w, topH);
+      if (this.kids()) return hitTop;
       const botY = o.holeY + o.holeH + 10;
       const botH = Math.max(0, o.y + o.h - botY - 4);
-      const hitTop = topH > 8 && aabb(box.x, box.y, box.w, box.h, x, o.y, w, topH);
       const hitBot = botH > 6 && aabb(box.x, box.y, box.w, box.h, x, botY, w, botH);
       return hitTop || hitBot;
     }
     if (o.kind === "tunnel" || o.kind === "pipe") {
+      if (this.kids()) return false;
       const standH = 68 * this.dog().hitH;
       if (this.player.sliding || standH < o.gap - 20) return false;
       const roof = this.ground - o.gap - 12;
       if (box.y + box.h < roof + 8) return false;
       return aabb(box.x, box.y, box.w, box.h, o.x + 8, roof, Math.max(20, o.w - 16), this.ground - roof - 4);
     }
-    const top = o.kind === "hurdle" || o.kind === "crate" || o.kind === "hydrant" ? 10 : 6;
-    return aabb(box.x, box.y, box.w, box.h, x, o.y + top, w, Math.max(12, o.h - top - 4));
+    const top = o.kind === "hurdle" || o.kind === "crate" || o.kind === "hydrant" ? this.kids() ? 16 : 10 : 6;
+    const pad = this.kids() ? 16 : 12;
+    const hx = o.x + (o.kind === "hoop" ? o.w * 0.28 : pad);
+    const hw = Math.max(16, o.w - (hx - o.x) * 2);
+    return aabb(box.x, box.y, box.w, box.h, hx, o.y + top, hw, Math.max(12, o.h - top - 4));
   }
 
   private stepObstacles(_dt: number) {
@@ -1089,6 +1114,10 @@ export class PacklineGame {
       const overlapX = box.x < o.x + o.w && box.x + box.w > o.x;
       if (overlapX) {
         if (o.kind === "tunnel" || o.kind === "pipe") {
+          if (this.kids() && this.player.grounded && !this.player.sliding) {
+            this.player.sliding = true;
+            this.player.slideT = 0.5;
+          }
           if (this.player.sliding) {
             this.inTunnel = true;
             if (!o.special) {
@@ -1315,7 +1344,7 @@ export class PacklineGame {
   }
 
   private emitHud() {
-    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${Math.ceil(this.boostT)}|${this.biome}|${this.usedRevive}`;
+    const snap = `${this.phase}|${Math.floor(this.score)}|${this.combo}|${Math.round(this.speed / 8)}|${this.save.muted}|${this.newBest}|${this.save.highScore}|${this.charId}|${this.threads}|${this.tunnels}|${this.runTreats}|${this.save.treats}|${Math.ceil(this.shieldT)}|${Math.ceil(this.magnetT)}|${Math.ceil(this.frenzyT)}|${Math.ceil(this.boostT)}|${this.biome}|${this.usedRevive}|${this.save.kids}`;
     if (snap === this.hudKey) return;
     this.hudKey = snap;
     this.onHud({
@@ -1345,6 +1374,7 @@ export class PacklineGame {
       reviveCost: this.reviveCost,
       biome: this.biome,
       missions: toHud(this.save.missions),
+      kids: this.save.kids,
     });
     this.hudDirty = false;
   }

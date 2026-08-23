@@ -39,6 +39,7 @@ const idleHud: HudState = {
   reviveCost: 40,
   biome: "park",
   missions: [],
+  kids: false,
 };
 
 function formatScore(n: number) {
@@ -235,6 +236,7 @@ export function GameApp() {
                 {playing ? (
                   <>
                     {dog.name}
+                    {hud.kids ? <span className="ml-2 text-accent">Kids</span> : null}
                     {hud.runTreats > 0 ? <span className="ml-2 tabular-nums">{hud.runTreats} treats</span> : null}
                   </>
                 ) : (
@@ -302,7 +304,9 @@ export function GameApp() {
             >
               <p className="text-center text-[10px] tracking-[0.32em] text-muted uppercase">Daily park</p>
               <h1 className="font-display text-center text-4xl leading-none font-extrabold tracking-tight">Packline</h1>
-              <p className="mt-1 text-center text-sm text-muted">Triple-jump the treat trail. Steak at the top is 50.</p>
+              <p className="mt-1 text-center text-sm text-muted">
+                {hud.kids ? "Kids mode: slower, bigger gaps, magnet on." : "Triple-jump the treat trail. Steak at the top is 50."}
+              </p>
               <div className="mx-auto mt-3 w-full max-w-md">
                 <p className="mb-1 text-[10px] tracking-[0.28em] text-muted uppercase">Park board</p>
                 <PackBoard rows={board} compact />
@@ -354,6 +358,21 @@ export function GameApp() {
                   );
                 })}
               </div>
+              <button
+                type="button"
+                data-ui
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  gameRef.current?.setKids(!hud.kids);
+                }}
+                className={cn(
+                  "mx-auto mt-3 flex h-12 w-full max-w-md items-center justify-center rounded-lg border text-sm font-medium",
+                  hud.kids ? "border-accent bg-elevated text-accent" : "border-border bg-bg/80 text-muted",
+                )}
+              >
+                {hud.kids ? "Kids mode on" : "Kids mode"}
+              </button>
               <Button
                 type="button"
                 data-ui
